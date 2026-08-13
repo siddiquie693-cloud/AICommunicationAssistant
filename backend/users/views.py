@@ -6,6 +6,7 @@ from rest_framework.permissions import IsAuthenticated
 from .serializers import (
     LogoutSerializer,
     UserRegistrationSerializer,
+    UserProfileSerializer,
 )
 
 class UserRegistrationAPIVIew(APIView):
@@ -54,4 +55,29 @@ class LogoutAPIView(APIView):
                 "message": "Successfully logged out."
             },
             status=status.HTTP_200_OK,
-        )        
+        )
+
+class UserProfileAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        serializer = UserProfileSerializer(request.user)
+
+        return Response(
+            serializer.data,
+            status=status.HTTP_200_OK,
+        )
+    def patch(self, request):
+        serializer = UserProfileSerializer(
+            request.user,
+            data=request.data,
+            partial=True,
+        )
+
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+
+        return Response(
+            serializer.data,
+            status=status.HTTP_200_OK,
+        )            

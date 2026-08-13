@@ -8,6 +8,7 @@ from .views import (
     LogoutAPIView,
     UserRegistrationAPIVIew,
     CurentUserAPIVIew,
+    UserProfileAPIView,
 )
 
 urlpatterns = [
@@ -16,4 +17,5 @@ urlpatterns = [
     path("refresh/", TokenRefreshView.as_view(), name="token-refresh",),
     path("me/", CurentUserAPIVIew.as_view(), name="current-user",),
     path("logout/", LogoutAPIView.as_view(), name="logout",),
+    path("profile/", UserProfileAPIView.as_view(), name="user-profile",),
 ]

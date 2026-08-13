@@ -42,4 +42,24 @@ class LogoutSerializer(serializers.Serializer):
 
     def save(self, **kwargs):
         self.token.blacklist()
+
+class UserProfileSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = User
+        fields = [
+            "id",
+            "username",
+            "email",
+            "first_name",
+            "last_name",
+            "preferred_language",
+            "voice_language",
+            "timezone",
+        ]
+        read_only_fields = [
+            "id",
+            "username",
+            "email",
+        ]
+
             

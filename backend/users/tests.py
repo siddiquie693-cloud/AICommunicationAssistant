@@ -212,7 +212,169 @@ class UserLoginAPITestCase(APITestCase):
         self.assertEqual(
             response.status_code,
             status.HTTP_401_UNAUTHORIZED,
-        )                   
+        )
+
+    def test_profile_requires_authentication(self):
+        response = self.client.get(
+            "/api/auth/profile/",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_401_UNAUTHORIZED,
+        )
+
+    def test_get_profile_returns_authentication_user(self):
+        login_response = self.client.post(
+            "/api/auth/login/",
+            {
+                "username": "loginuser",
+                "password": "StrongPass123",
+            },
+            fromat="json",
+        )
+
+        self.assertEqual(
+            login_response.status_code,
+            status.HTTP_200_OK,
+        )
+
+        access_token = login_response.data["access"]
+
+        self.client.credentials(
+            HTTP_AUTHORIZATION=f"Bearer {access_token}"
+        )
+
+        response = self.client.get(
+            "/api/auth/profile/",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_200_OK,
+        )
+
+        self.assertEqual(
+            response.data["username"],
+            "loginuser",
+        )
+
+        self.assertEqual(
+            response.data["email"],
+            "login@example.com",
+        )
+
+    def test_ipdate_profile(self):
+        login_response = self.client.post(
+            "/api/auth/login/",
+            {
+                "username": "loginuser",
+                "password": "StrongPass123",
+            },
+            format="json",
+        )
+
+        access_token = login_response.data["access"]
+
+        self.client.credentials(
+            HTTP_AUTHORIZATION=f"Bearer {access_token}"
+        )
+
+        response = self.client.patch(
+            "/api/auth/profile/",
+            {
+                "first_name": "Updated",
+                "last_name": "User",
+                "preferred_language": "Englis",
+                "voice_language": "Hindi",
+                "timezone": "Asia/Kolkata",
+            },
+            format="json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_200_OK,
+        )
+
+        self.assertEqual(
+            response.data["first_name"],
+            "Updated",
+        )
+
+        self.assertEqual(
+            response.data["voice_language"],
+            "Hindi",
+        )
+
+        self.assertEqual(
+            response.data["timezone"],
+            "Asia/Kolkata",
+        )
+
+        user = User.objects.get(
+            username="loginuser"
+        )
+
+        self.assertEqual(
+            user.first_name,
+            "Updated",
+        )
+
+        self.assertEqual(
+            user.voice_language,
+            "Hindi",
+        )
+
+    def test_profile_cannot_update_username_or_email(self):
+        login_response = self.client.post(
+            "/api/auth/login/",
+            {
+                "username": "loginuser",
+                "password": "StrongPass123",
+            },
+            format="json",
+        )
+
+        access_token = login_response.data["access"]
+
+        self.client.credentials(
+            HTTP_AUTHORIZATION=f"Bearer {access_token}"
+        )
+
+        response = self.client.patch(
+            "/api/auth/profile/",
+            {
+                "username": "changed_username",
+                "email": "changed@example.com",
+                "first_name": "Protected",
+            },
+            format="json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_200_OK,
+        )
+
+        user = User.objects.get(
+            username="loginuser"
+        )
+
+        self.assertEqual(
+            user.username,
+            "loginuser",
+        )
+
+        self.assertEqual(
+            user.email,
+            "login@example.com",
+        )
+
+        self.assertEqual(
+            user.first_name,
+            "Protected",
+        )                                   
 
 class UserRegistrationSerializerTestCase(APITestCase):
     def test_valid_user_registration(self):
