@@ -135,7 +135,84 @@ class UserLoginAPITestCase(APITestCase):
         self.assertEqual(
             response.data["email"],
             "login@example.com",
-        )            
+        )
+
+    def test_logout_blacklist_refresh_token(self):
+        login_response = self.client.post(
+            "/api/auth/login/",
+            {
+                "username": "loginuser",
+                "password": "StrongPass123",
+            },
+            format="json",
+        )
+
+        self.assertEqual(
+            login_response.status_code,
+            status.HTTP_200_OK,
+        )
+
+        access_token = login_response.data["access"]
+        refresh_token = login_response.data["refresh"]
+
+        self.client.credentials(
+            HTTP_AUTHORIZATION=f"Bearer {access_token}"
+        )
+
+        logout_response = self.client.post(
+            "/api/auth/logout/",
+            {
+                "refresh": refresh_token,
+            },
+            format="json",
+        )
+
+        self.assertEqual(
+            logout_response.status_code,
+            status.HTTP_200_OK,
+        )
+
+        self.assertEqual(
+            logout_response.data["message"],
+            "Successfully logged out.",
+        )
+
+        refresh_response = self.client.post(
+            "/api/auth/refresh/",
+            {
+                "refresh": refresh_token,
+            },
+            format="json",
+        )
+
+        self.assertEqual(
+            refresh_response.status_code,
+            status.HTTP_401_UNAUTHORIZED,
+        )
+
+    def test_logout_requires_authentication(self):
+        login_response = self.client.post(
+            "/api/auth/login/",
+            {
+                "username": "loginuser",
+                "password": "StrongPass123",
+            },
+            format="json",
+        )
+        refresh_token = login_response.data["refresh"]
+
+        response = self.client.post(
+            "/api/auth/logout/",
+            {
+                "refresh": refresh_token,
+            },
+            format ="json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_401_UNAUTHORIZED,
+        )                   
 
 class UserRegistrationSerializerTestCase(APITestCase):
     def test_valid_user_registration(self):
