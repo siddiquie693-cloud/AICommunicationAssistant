@@ -6,6 +6,137 @@ from .serializers import UserRegistrationSerializer
 
 User = get_user_model()
 
+class UserLoginAPITestCase(APITestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="loginuser",
+            email="login@example.com",
+            password="StrongPass123",
+        )
+
+    def test_user_login_return_tokens(self):
+        data = {
+            "username": "loginuser",
+            "password": "StrongPass123",
+        }
+
+        response = self.client.post(
+            "/api/auth/login/",
+            data, format="json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_200_OK,
+        )
+
+        self.assertIn("access", response.data)
+        self.assertIn("refresh", response.data)
+
+        self.assertTrue(response.data["access"])
+        self.assertTrue(response.data["refresh"])
+
+    def test_invallid_password_is_rejected(self):
+        data = {
+            "username": "loginuser",
+            "password": "WrongPassword123",
+        }
+
+        response = self.client.post(
+            "/api/auth/login/",
+            data, format="json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_401_UNAUTHORIZED,
+        )
+
+        self.assertNotIn("access", response.data)
+        self.assertNotIn("refresh", response.data)
+
+    def test_refresh_token_return_new_access_token(self):
+        login_data = {
+            "username": "loginuser",
+            "password": "StrongPass123",
+        }
+
+        login_response = self.client.post(
+            "/api/auth/login/",
+            login_data, format="json",
+        )
+
+        self.assertEqual(
+            login_response.status_code,
+            status.HTTP_200_OK,
+        )
+
+        refresh_token = login_response.data["refresh"]
+        response = self.client.post(
+            "/api/auth/refresh/",
+            {
+                "refresh": refresh_token,
+            },
+            format="json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_200_OK,
+        )
+        self.assertIn("access", response.data)
+        self.assertTrue(response.data["access"])
+
+    def test_current_user_requires_authentication(self):
+        response = self.client.get(
+            "/api/auth/me/",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_401_UNAUTHORIZED,
+        )
+
+    def test_current_user_return_authenticated_user(self):
+        login_response = self.client.post(
+            "/api/auth/login/",
+            {
+                "username": "loginuser",
+                "password": "StrongPass123",
+            },
+            format='json',
+        )
+
+        self.assertEqual(
+            login_response.status_code,
+            status.HTTP_200_OK,
+        )
+
+        access_token = login_response.data["access"]
+
+        self.client.credentials(
+            HTTP_AUTHORIZATION=f"Bearer {access_token}"
+        )
+
+        response = self.client.get(
+            "/api/auth/me/",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_200_OK,
+        )
+
+        self.assertEqual(
+            response.data["username"],
+            "loginuser",
+        )
+
+        self.assertEqual(
+            response.data["email"],
+            "login@example.com",
+        )            
+
 class UserRegistrationSerializerTestCase(APITestCase):
     def test_valid_user_registration(self):
         data = {
