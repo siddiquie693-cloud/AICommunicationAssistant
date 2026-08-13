@@ -52,6 +52,13 @@ INSTALLED_APPS = [
 
     # Local
     "core",
+    "users",
+]
+
+AUTH_USER_MODEL = "users.User"
+
+AUTHENTICATION_BACKENDS = [
+    "django.contrib.auth.backends.ModelBackend",
 ]
 
 MIDDLEWARE = [
