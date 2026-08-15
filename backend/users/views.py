@@ -7,6 +7,7 @@ from .serializers import (
     LogoutSerializer,
     UserRegistrationSerializer,
     UserProfileSerializer,
+    ChangePasswordSerializer,
 )
 
 class UserRegistrationAPIVIew(APIView):
@@ -80,4 +81,23 @@ class UserProfileAPIView(APIView):
         return Response(
             serializer.data,
             status=status.HTTP_200_OK,
-        )            
+        )
+
+class ChangePasswordAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        serializer = ChangePasswordSerializer(
+            data=request.data,
+            context={"request": request},
+        )
+
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+
+        return Response(
+            {
+                "message": "Password changed successfully."
+            },
+            status=status.HTTP_200_OK,
+        )                

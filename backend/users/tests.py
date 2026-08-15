@@ -374,7 +374,175 @@ class UserLoginAPITestCase(APITestCase):
         self.assertEqual(
             user.first_name,
             "Protected",
-        )                                   
+        )
+
+    def test_change_password_requires_authentication(self):
+        response = self.client.post(
+            "/api/auth/change-password/",
+            {
+                "old_password": "StrongPass123",
+                "new_password": "NewStrongPass456",
+            },
+            format="json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_401_UNAUTHORIZED,
+        )
+
+    def test_change_password_success(self):
+        login_response = self.client.post(
+            "/api/auth/login/",
+            {
+                "username": "loginuser",
+                "password": "StrongPass123",
+            },
+            format="json",
+        )
+
+        self.assertEqual(
+            login_response.status_code,
+            status.HTTP_200_OK,
+        )
+
+        access_token = login_response.data["access"]
+
+        self.client.credentials(
+            HTTP_AUTHORIZATION=f"Bearer {access_token}"
+        )
+
+        response = self.client.post(
+            "/api/auth/change-password/",
+            {
+                "old_password": "StrongPass123",
+                "new_password": "NewStrongPass456",
+            },
+            format="json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_200_OK,
+        )
+
+        self.assertEqual(
+            response.data["message"],
+            "Password changed successfully.",
+        )
+
+        user = User.objects.get(
+            username="loginuser"
+        )
+
+        self.assertTrue(
+            user.check_password("NewStrongPass456")
+        )
+
+        self.assertFalse(
+            user.check_password("StrongPass123")
+        )
+
+    def test_change_password_rejects_wrong_old_password(self):
+        login_response = self.client.post(
+            "/api/auth/login/",
+            {
+                "username": "loginuser",
+                "password": "StrongPass123",
+            },
+            format="json",
+        )
+
+        access_token = login_response.data["access"]
+
+        self.client.credentials(
+            HTTP_AUTHORIZATION=f"Bearer {access_token}"
+        )
+
+        response = self.client.post(
+            "/api/auth/change-password/",
+            {
+                "old_password": "WrongPassword123",
+                "new_password": "NewStrongPass456",
+            },
+            format="json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_400_BAD_REQUEST,
+        )
+
+        self.assertIn(
+            "old_password", response.data,
+        )
+
+    def test_change_password_rejects_same_password(self):
+        login_response = self.client.post(
+            "/api/auth/login/",
+            {
+                "username": "loginuser",
+                "password": "StrongPass123",
+            },
+            format="json",
+        )
+        access_token = login_response.data["access"]
+
+        self.client.credentials(
+            HTTP_AUTHORIZATION=f"Bearer {access_token}"
+        )
+
+        response = self.client.post(
+            "/api/auth/change-password/",
+            {
+                "old_password": "StrongPass123",
+                "new_password": "StrongPass123",
+            },
+            format="json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_400_BAD_REQUEST,
+        )
+
+        self.assertIn(
+            "new_password", response.data,
+        )
+
+    def test_change_password_rejects_short_password(self):
+        login_response = self.client.post(
+            "/api/auth/login/",
+            {
+                "username": "loginuser",
+                "password": "StrongPass123",
+            },
+            format="json",
+        )
+        access_token = login_response.data["access"]
+
+        self.client.credentials(
+            HTTP_AUTHORIZATION=f"Bearer {access_token}"
+        )
+
+        response = self.client.post(
+            "/api/auth/change-password/",
+            {
+                "old_password": "StrongPass123",
+                "new_password": "123",
+            },
+            format="json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_400_BAD_REQUEST,
+        )
+
+        self.assertIn(
+            "new_password", response.data,
+        )
+
 
 class UserRegistrationSerializerTestCase(APITestCase):
     def test_valid_user_registration(self):
