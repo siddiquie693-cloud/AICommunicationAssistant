@@ -3,11 +3,15 @@ from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated
+
+from django.utils import timezone
+
 from .serializers import (
     LogoutSerializer,
     UserRegistrationSerializer,
     UserProfileSerializer,
     ChangePasswordSerializer,
+    EmailVerificayionSerializer,
 )
 
 class UserRegistrationAPIVIew(APIView):
@@ -100,4 +104,38 @@ class ChangePasswordAPIView(APIView):
                 "message": "Password changed successfully."
             },
             status=status.HTTP_200_OK,
-        )                
+        )
+
+class EmailVerificationAPIView(APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        serializer = EmailVerificayionSerializer(
+            data=request.data,
+        )
+
+        serializer.is_valid(raise_exception=True)
+
+        verification_token = serializer.verification_token
+        user = verification_token.user
+
+        user.email_verified = True
+        user.email_verified_at = timezone.now()
+        user.save(
+            update_fields=[
+                "email_verified",
+                "email_verified_at",
+            ]
+        )
+
+        verification_token.used = True
+        verification_token.save(
+            update_fields=["used"]
+        )
+
+        return Response(
+            {
+                "message": "Email verified successfully."
+            },
+            status=status.HTTP_200_OK,
+        )                    

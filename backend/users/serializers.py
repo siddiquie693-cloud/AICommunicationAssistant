@@ -1,6 +1,9 @@
 from django.contrib.auth import get_user_model
 from rest_framework import serializers
 from rest_framework_simplejwt.tokens import RefreshToken
+from datetime import timedelta
+from django.utils import timezone
+
 User = get_user_model()
 
 class UserRegistrationSerializer(serializers.ModelSerializer):
@@ -96,4 +99,53 @@ class ChangePasswordSerializer(serializers.Serializer):
         user.set_password(self.validated_data["new_password"])
         user.save(update_fields=["password"])
 
-        return user            
+        return user
+
+class EmailVerificationTokenSerializer(serializers.Serializer):
+    def create_token(self, user):
+        EmailVerificationToken = user.email_verification_tokens.model
+
+        EmailVerificationToken.objects.filter(
+            user=user,
+            used=False,
+        ).update(
+            used=True,
+        )
+
+        token = EmailVerificationToken.objects.create(
+            user=user,
+            expires_at=timezone.now() + timedelta(minutes=30),
+        )
+
+        return token
+
+class EmailVerificayionSerializer(serializers.Serializer):
+    token = serializers.UUIDField()
+
+    def validate_token(self, value):
+        from .models import EmailVerificationToken
+
+        try:
+            verification_token = EmailVerificationToken.objects.select_related(
+                "user"
+            ).get(token=value)
+        except EmailVerificationToken.DoesNotExist:
+            raise serializers.ValidationError(
+                "Invalid verification token."
+            )
+
+        if verification_token.used:
+            raise serializers.ValidationError(
+                "Verification token has already been used."
+            )
+
+        if verification_token.is_expired():
+            raise serializers.ValidationError(
+                "Verification token has expired."
+            )
+
+        self.verification_token = verification_token
+
+        return value
+            
+                

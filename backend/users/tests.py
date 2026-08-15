@@ -1,8 +1,13 @@
 from django.contrib.auth import get_user_model
 from rest_framework.test import APITestCase
 from rest_framework import status
+from datetime import timedelta
+from django.utils import timezone
 
-from .serializers import UserRegistrationSerializer
+from .serializers import (
+    UserRegistrationSerializer,
+    EmailVerificationTokenSerializer,
+)
 
 User = get_user_model()
 
@@ -687,4 +692,141 @@ class UserRegistrationAPITestCase(APITestCase):
             status.HTTP_400_BAD_REQUEST,
         )
 
-        self.assertIn("email", response.data)          
+        self.assertIn("email", response.data) 
+
+class EmailVerificationTokenTestCase(APITestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="verificationuser",
+            email="verification@example.com",
+            password="StrongPass123",
+        )
+
+    def test_verification_token_is_created(self):
+        serializer = EmailVerificationTokenSerializer()
+
+        token = serializer.create_token(self.user)
+
+        self.assertIsNotNone(token)
+        self.assertEqual(token.user, self.user)
+        self.assertFalse(token.used)
+        self.assertFalse(token.is_expired())
+
+    def test_old_unused_tokens_are_invalidated(self):
+        serializer = EmailVerificationTokenSerializer()
+
+        first_token = serializer.create_token(self.user)
+        second_token = serializer.create_token(self.user)
+
+        first_token.refresh_from_db()
+
+        self.assertTrue(first_token.used)
+        self.assertFalse(second_token.used)
+
+    def test_token_expires_after_expiration_time(self):
+        serializer = EmailVerificationTokenSerializer()
+
+        token = serializer.create_token(self.user)
+
+        token.expires_at = timezone.now() - timedelta(minutes=1)
+        token.save(update_fields=["expires_at"])
+
+        self.assertTrue(token.is_expired())    
+
+class EmailVerificationAPITestCase(APITestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="verifyuser",
+            email="verify@example.com",
+            password="StrongPass123",
+        )
+
+    def create_token(self):
+        serializer = EmailVerificationTokenSerializer()
+        return serializer.create_token(self.user)
+
+    def test_valid_token_verifies_email(self):
+        token = self.create_token()
+
+        response = self.client.post(
+            "/api/auth/verify-email/",
+            {
+                "token": str(token.token),
+            },
+            format="json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_200_OK,
+        )
+
+        self.user.refresh_from_db()
+        token.refresh_from_db()
+
+        self.assertTrue(self.user.email_verified)
+        self.assertIsNotNone(self.user.email_verified_at)
+        self.assertTrue(token.used)
+
+        self.assertEqual(
+            response.data["message"],
+            "Email verified successfully.",
+        )
+
+    def test_invalid_token_is_rejected(self):
+        response = self.client.post(
+            "/api/auth/verify-email/",
+            {
+                "token": "550e8400-e29b-41d4-a716-446655440000",
+            },
+            format="json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_400_BAD_REQUEST,
+        )
+
+    def test_expired_token_is_rejected(self):
+        token = self.create_token()
+
+        token.expires_at = timezone.now() - timedelta(minutes=1)
+        token.save(update_fields=["expires_at"])
+
+        response = self.client.post(
+            "/api/auth/verify-email/",
+            {
+                "token": str(token.token),
+            },
+            format="json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_400_BAD_REQUEST,
+        )
+
+        self.user.refresh_from_db()
+        token.refresh_from_db()
+
+        self.assertFalse(self.user.email_verified)
+        self.assertFalse(token.used)
+
+    def test_used_token_is_rejected(self):
+        token = self.create_token()
+
+        token.used= True
+        token.save(update_fields=["used"])
+
+        response = self.client.post(
+            "/api/auth/verify-email/",
+            {
+                "token": str(token.token),
+            },
+            fromat="json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_400_BAD_REQUEST,
+        )                

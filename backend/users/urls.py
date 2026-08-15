@@ -10,6 +10,7 @@ from .views import (
     CurentUserAPIVIew,
     UserProfileAPIView,
     ChangePasswordAPIView,
+    EmailVerificationAPIView,
 )
 
 urlpatterns = [
@@ -20,4 +21,5 @@ urlpatterns = [
     path("logout/", LogoutAPIView.as_view(), name="logout",),
     path("profile/", UserProfileAPIView.as_view(), name="user-profile",),
     path("change-password/", ChangePasswordAPIView.as_view(), name="change-password",),
+    path("verify-email/", EmailVerificationAPIView.as_view(), name="verify-email",),
 ]
