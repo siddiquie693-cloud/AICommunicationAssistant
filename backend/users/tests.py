@@ -4,6 +4,12 @@ from rest_framework import status
 from datetime import timedelta
 from django.utils import timezone
 from .models import PasswordResetToken
+from unittest.mock import patch
+from django.test import TestCase
+from .services import (
+    send_email_verification_email,
+    send_password_reset_email,
+)
 
 from .serializers import (
     UserRegistrationSerializer,
@@ -1048,4 +1054,70 @@ class ResetPasswordAPITestCase(APITestCase):
         self.assertEqual(
             response.status_code,
             status.HTTP_400_BAD_REQUEST,
-        )                   
+        )
+
+class EmailServiceTestCase(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="emailserviceuser",
+            email="emailservice@example.com",
+            password="StrongPass123",
+        )
+
+    @patch("users.services.send_mail")
+    def test_send_email_verification_email(self, mock_send_mail):
+        serializer = EmailVerificationTokenSerializer()
+        token = serializer.create_token(self.user)
+
+        send_email_verification_email(
+            self.user,
+            token,
+        )
+
+        mock_send_mail.assert_called_once()
+
+        call_kwargs = mock_send_mail.call_args.kwargs
+
+        self.assertEqual(
+            call_kwargs["subject"],
+            "Verify your email",
+        )
+
+        self.assertEqual(
+            call_kwargs["recipient_list"],
+            ["emailservice@example.com"],
+        )
+
+        self.assertIn(
+            str(token.token),
+            call_kwargs["message"],
+        )
+
+    @patch("users.services.send_mail")
+    def test_send_password_reset_email(self, mock_send_mail):
+        serializer = PasswordResetTokenSerializer()
+        token = serializer.create_token(self.user)
+
+        send_password_reset_email(
+            self.user,
+            token,
+        )
+
+        mock_send_mail.assert_called_once()
+
+        call_kwargs = mock_send_mail.call_args.kwargs
+
+        self.assertEqual(
+            call_kwargs["subject"],
+            "Reset your password",
+        )
+
+        self.assertEqual(
+            call_kwargs["recipient_list"],
+            ["emailservice@example.com"],
+        )
+
+        self.assertIn(
+            str(token.token),
+            call_kwargs["message"],
+        )

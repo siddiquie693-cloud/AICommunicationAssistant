@@ -165,3 +165,9 @@ REST_FRAMEWORK = {
 
 # CORS
 CORS_ALLOW_ALL_ORIGINS = True
+
+EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
+
+DEFAULT_FROM_EMAIL = "noreply@aicommunicationassistant.local"
+
+FRONTEND_URL = "http://localhost:3000"
