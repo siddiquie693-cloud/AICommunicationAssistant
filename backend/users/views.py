@@ -12,7 +12,14 @@ from .serializers import (
     UserProfileSerializer,
     ChangePasswordSerializer,
     EmailVerificayionSerializer,
+    ForgotPasswordSerializer,
+    PasswordResetTokenSerializer,
+    ResetPasswordSerializer,
 )
+
+from django.contrib.auth import get_user_model
+
+User = get_user_model()
 
 class UserRegistrationAPIVIew(APIView):
     permission_classes = [AllowAny]
@@ -138,4 +145,53 @@ class EmailVerificationAPIView(APIView):
                 "message": "Email verified successfully."
             },
             status=status.HTTP_200_OK,
-        )                    
+        )
+
+class ForgotPasswordAPIView(APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        serializer = ForgotPasswordSerializer(
+            data=request.data,
+        )
+
+        serializer.is_valid(raise_exception=True)
+
+        email = serializer.validated_data["email"]
+
+        user = User.objects.filter(
+            email=email,
+            is_active=True,
+        ).first()
+
+        if user:
+            token_serializer = PasswordResetTokenSerializer()
+            token_serializer.create_token(user)
+
+        return Response(
+            {
+                "message": (
+                    "If an account exists with this email, "
+                    "a password reset link has been sent."
+                )
+            },
+            status=status.HTTP_200_OK,
+        )
+
+class ResetPasswordAPIView(APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        serializer = ResetPasswordSerializer(
+            data=request.data,
+        )
+
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+
+        return Response(
+            {
+                "message": "Password reset successfully."
+            },
+            status=status.HTTP_200_OK,
+        )                                

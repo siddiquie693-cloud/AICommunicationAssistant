@@ -3,6 +3,7 @@ from rest_framework import serializers
 from rest_framework_simplejwt.tokens import RefreshToken
 from datetime import timedelta
 from django.utils import timezone
+from .models import PasswordResetToken
 
 User = get_user_model()
 
@@ -147,5 +148,75 @@ class EmailVerificayionSerializer(serializers.Serializer):
         self.verification_token = verification_token
 
         return value
-            
-                
+
+class PasswordResetTokenSerializer(serializers.Serializer):
+    def create_token(self, user):
+        PasswordResetToken = user.password_reset_tokens.model
+
+        PasswordResetToken.objects.filter(
+            user=user,
+            used=False,
+        ).update(
+            used=True,
+        )
+
+        token =PasswordResetToken.objects.create(
+            user=user,
+            expires_at=timezone.now() + timedelta(minutes=30),
+        )
+        return token
+
+class ForgotPasswordSerializer(serializers.Serializer):
+    email = serializers.EmailField()
+
+class ResetPasswordSerializer(serializers.Serializer):
+    token = serializers.UUIDField()
+    new_password = serializers.CharField(
+        write_only=True,
+        min_length=8,
+    )
+
+    def validate(self, attrs):
+        token_value = attrs["token"]
+
+        try:
+            reset_token = PasswordResetToken.objects.select_related(
+                "user"
+            ).get(token=token_value)
+        except PasswordResetToken.DoesNotExist:
+            raise serializers.ValidationError(
+                {
+                    "token": "Invalid password reset token."
+                }
+            )
+
+        if reset_token.used:
+            raise serializers.ValidationError(
+                {
+                    "token": "Password reset token has already been used."
+                }
+            )
+
+        if reset_token.is_expired():
+            raise serializers.ValidationError(
+                {
+                    "token": "Password reset token has expired."
+                }
+            )
+        attrs["reset_token"] = reset_token
+
+        return attrs
+
+    def save(self):
+        reset_token = self.validated_data["reset_token"]
+        new_password = self.validated_data["new_password"]
+
+        user = reset_token.user
+
+        user.set_password(new_password)
+        user.save(update_fields=["password"])
+
+        reset_token.used =True
+        reset_token.save(update_fields=["used"])
+
+        return user    

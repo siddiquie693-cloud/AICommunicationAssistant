@@ -3,10 +3,12 @@ from rest_framework.test import APITestCase
 from rest_framework import status
 from datetime import timedelta
 from django.utils import timezone
+from .models import PasswordResetToken
 
 from .serializers import (
     UserRegistrationSerializer,
     EmailVerificationTokenSerializer,
+    PasswordResetTokenSerializer,
 )
 
 User = get_user_model()
@@ -829,4 +831,221 @@ class EmailVerificationAPITestCase(APITestCase):
         self.assertEqual(
             response.status_code,
             status.HTTP_400_BAD_REQUEST,
-        )                
+        )
+
+class PasswordResetTokenTestCase(APITestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="resetuser",
+            email="reset@example.com",
+            password="StrongPass123",
+        )
+
+    def test_password_reset_token_is_created(self):
+        serializer = PasswordResetTokenSerializer()
+
+        token = serializer.create_token(self.user)
+
+        self.assertIsNotNone(token)
+        self.assertEqual(token.user, self.user)
+        self.assertFalse(token.used)
+        self.assertFalse(token.is_expired())
+
+    def test_old_reset_token_are_invalidated(self):
+        serializer = PasswordResetTokenSerializer()
+
+        first_token = serializer.create_token(self.user)
+        second_token = serializer.create_token(self.user)
+
+        first_token.refresh_from_db()
+
+        self.assertTrue(first_token.used)
+        self.assertFalse(second_token.used)
+
+    def test_reset_token_expires(self):
+        serializer =PasswordResetTokenSerializer()
+
+        token = serializer.create_token(self.user)
+
+        token.expires_at = timezone.now() - timedelta(minutes=1)
+        token.save(update_fields=["expires_at"])
+
+        self.assertTrue(token.is_expired())
+
+class ForgotPasswordAPItestCase(APITestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="forgotuser",
+            email="forgot@example.com",
+            password="StrongPass123",
+        )
+
+    def test_forgot_password_existing_email(self):
+        response = self.client.post(
+            "/api/auth/forgot-password/",
+            {
+                "email": "forgot@example.com",
+            },
+            format="json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_200_OK,
+        )
+
+        self.assertEqual(
+            response.data["message"],
+            (
+                "If an account exists with this email, "
+                "a password reset link has been sent."
+            ),
+        )
+
+        self.assertTrue(
+            PasswordResetToken.objects.filter(
+                user=self.user,
+                used=False,
+            ).exists()
+        )
+
+    def test_forgot_password_unknow_email(self):
+        response = self.client.post(
+            "/api/auth/forgot-password/",
+            {
+                "email": "unknow@example.com",
+            },
+            format="json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_200_OK,
+        )
+
+        self.assertEqual(
+            response.data["message"],
+            (
+                "If an account exists with this email, "
+                "a password reset link has been sent."
+            ),
+        )
+
+    def test_forgot_password_invalid_email(self):
+        response = self.client.post(
+            "/api/auth/forgot-password/",
+            {
+                "email": "not-an-email",
+            },
+            format="json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_400_BAD_REQUEST,
+        )       
+
+class ResetPasswordAPITestCase(APITestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="resetapiuser",
+            email="resetapi@example.com",
+            password="OldPassword123",
+        )
+
+        serializer = PasswordResetTokenSerializer()
+        self.token = serializer.create_token(self.user)
+
+    def test_reset_password_success(self):
+        response = self.client.post(
+            "/api/auth/reset-password/",
+            {
+                "token": str(self.token.token),
+                "new_password": "NewPassword123",
+            },
+            format="json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_200_OK,
+        )
+
+        self.assertEqual(
+            response.data["message"],
+            "Password reset successfully.",
+        )
+
+        self.user.refresh_from_db()
+        self.token.refresh_from_db()
+
+        self.assertTrue(
+            self.user.check_password("NewPassword123")
+        )
+
+        self.assertTrue(self.token.used)
+
+    def test_invalid_reset_token_is_rejected(self):
+        response = self.client.post(
+            "/api/auth/reset-password/",
+            {
+                "token": "550e8400-e29b-41d4-a716-446655440000",
+                "new_password": "NewPassword123",
+            },
+            format="json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_400_BAD_REQUEST,
+        )
+
+    def test_used_reset_token_is_rejected(self):
+        self.token.used = True
+        self.token.save(update_fields=["used"])
+
+        response = self.client.post(
+            "/api/auth/reset-password/",
+            {
+                "token": str(self.token.token),
+                "new_password": "NewPassword123",
+            },
+            format="json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_400_BAD_REQUEST,
+        )
+
+    def test_expired_reset_token_is_rejected(self):
+        self.token.expires_at = timezone.now() - timedelta(minutes=1)
+        self.token.save(update_fields=["expires_at"])
+
+        response = self.client.post(
+            "/api/auth/reset-password/",
+            {
+                "token": str(self.token.token),
+                "new_password": "NewPassword123",
+            },
+            format="json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_400_BAD_REQUEST,
+        )
+
+    def test_new_password_is_required(self):
+        response = self.client.post(
+            "/api/auth/reset-password/",
+            {
+                "token": str(self.token.token),
+            },
+            format="json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_400_BAD_REQUEST,
+        )                   
