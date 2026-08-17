@@ -598,7 +598,9 @@ class UserRegistrationSerializerTestCase(APITestCase):
         self.assertIn("password", serializer.errors)
 
 class UserRegistrationAPITestCase(APITestCase):
+
     def test_user_registration_api(self):
+
         data = {
             "username": "apiuser",
             "email": "apiuser@example.com",
@@ -636,6 +638,49 @@ class UserRegistrationAPITestCase(APITestCase):
                 email="apiuser@example.com"
             ).exists()
         )
+
+    @patch("users.views.send_email_verification_email")
+    def test_registration_sends_verification_email(self, mock_send_email):
+        data = {
+            "username": "emailtestuser",
+            "email": "emailtest@example.com",
+            "password": "StrongPass123",
+            "first_name": "Email",
+            "last_name": "Test",
+            "preferred_language": "English",
+            "voice_language": "Hindi",
+            "timezone": "Asia/Kolkata",
+        }
+
+        response = self.client.post(
+            "/api/auth/register/",
+            data,
+            format="json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_201_CREATED,
+        )
+
+        mock_send_email.assert_called_once()
+
+        called_user = mock_send_email.call_args.args[0]
+        called_token = mock_send_email.call_args.args[1]
+
+        self.assertEqual(
+            called_user.email,
+            "emailtest@example.com",
+        )
+
+        self.assertEqual(
+            called_token.user,
+            called_user,
+        )
+
+        self.assertFalse(
+            called_token.used,
+        )    
 
     def test_duplicate_email_is_rejected(self):
         User.objects.create_user(
@@ -914,7 +959,41 @@ class ForgotPasswordAPItestCase(APITestCase):
                 used=False,
             ).exists()
         )
+    @patch("users.views.send_password_reset_email")
+    def test_forgot_password_sends_reset_email(self, mock_send_email):
+        response = self.client.post(
+            "/api/auth/forgot-password/",
+            {
+                "email": "forgot@example.com",
+            },
+            format="json",
+        )
 
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_200_OK,
+        )
+
+        mock_send_email.assert_called_once()
+
+        called_user = mock_send_email.call_args.args[0]
+        called_token = mock_send_email.call_args.args[1]
+
+        self.assertEqual(
+            called_user,
+            self.user,
+        )
+
+        self.assertEqual(
+            called_token.user,
+            self.user,
+        )
+
+        self.assertFalse(
+            called_token.used,
+        ) 
+
+       
     def test_forgot_password_unknow_email(self):
         response = self.client.post(
             "/api/auth/forgot-password/",

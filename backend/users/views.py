@@ -5,6 +5,10 @@ from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated
 
 from django.utils import timezone
+from .services import (
+    send_email_verification_email,
+    send_password_reset_email,
+)
 
 from .serializers import (
     LogoutSerializer,
@@ -15,6 +19,7 @@ from .serializers import (
     ForgotPasswordSerializer,
     PasswordResetTokenSerializer,
     ResetPasswordSerializer,
+    EmailVerificationTokenSerializer,
 )
 
 from django.contrib.auth import get_user_model
@@ -29,6 +34,14 @@ class UserRegistrationAPIVIew(APIView):
 
         if serializer.is_valid():
             user = serializer.save()
+
+            token_serializer = EmailVerificationTokenSerializer()
+            verification_token = token_serializer.create_token(user)
+
+            send_email_verification_email(
+                user,
+                verification_token,
+            )
 
             return Response(
                 {
@@ -166,7 +179,9 @@ class ForgotPasswordAPIView(APIView):
 
         if user:
             token_serializer = PasswordResetTokenSerializer()
-            token_serializer.create_token(user)
+            reset_token = token_serializer.create_token(user)
+
+            send_password_reset_email(user, reset_token)
 
         return Response(
             {
