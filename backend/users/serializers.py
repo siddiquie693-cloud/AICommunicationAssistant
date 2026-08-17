@@ -4,6 +4,7 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from datetime import timedelta
 from django.utils import timezone
 from .models import PasswordResetToken
+from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 
 User = get_user_model()
 
@@ -219,4 +220,19 @@ class ResetPasswordSerializer(serializers.Serializer):
         reset_token.used =True
         reset_token.save(update_fields=["used"])
 
-        return user    
+        return user
+
+class UserLoginSerializer(TokenObtainPairSerializer):
+    def validate(self, attrs):
+        data = super().validate(attrs)
+
+        if not self.user.email_verified:
+            raise serializers.ValidationError(
+                {
+                    "email": (
+                        "Please verify your email address "
+                        "before logging in."
+                    )
+                }
+            )
+        return data        

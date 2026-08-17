@@ -25,6 +25,7 @@ class UserLoginAPITestCase(APITestCase):
             username="loginuser",
             email="login@example.com",
             password="StrongPass123",
+            email_verified=True,
         )
 
     def test_user_login_return_tokens(self):
@@ -277,7 +278,7 @@ class UserLoginAPITestCase(APITestCase):
             "login@example.com",
         )
 
-    def test_ipdate_profile(self):
+    def test_update_profile(self):
         login_response = self.client.post(
             "/api/auth/login/",
             {
@@ -555,6 +556,44 @@ class UserLoginAPITestCase(APITestCase):
         self.assertIn(
             "new_password", response.data,
         )
+
+    def test_unverified_email_cannot_login(self):
+        self.user.email_verified = False
+        self.user.save(update_fields=["email_verified"])
+
+        response = self.client.post(
+            "/api/auth/login/",
+            {
+                "username": "loginuser",
+                "password": "StrongPass123",
+            },
+            format="json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_400_BAD_REQUEST,
+        )
+
+        self.assertIn(
+            "email",
+            response.data,
+        )
+
+        self.assertEqual(
+            response.data["email"][0],
+            "Please verify your email address before logging in.",
+        )
+
+        self.assertNotIn(
+            "access",
+            response.data,
+        )
+
+        self.assertNotIn(
+            "refresh",
+            response.data,
+        )    
 
 
 class UserRegistrationSerializerTestCase(APITestCase):

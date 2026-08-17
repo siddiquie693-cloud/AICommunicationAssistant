@@ -3,6 +3,7 @@ from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated
+from rest_framework_simplejwt.views import TokenObtainPairView
 
 from django.utils import timezone
 from .services import (
@@ -20,6 +21,7 @@ from .serializers import (
     PasswordResetTokenSerializer,
     ResetPasswordSerializer,
     EmailVerificationTokenSerializer,
+    UserLoginSerializer,
 )
 
 from django.contrib.auth import get_user_model
@@ -209,4 +211,7 @@ class ResetPasswordAPIView(APIView):
                 "message": "Password reset successfully."
             },
             status=status.HTTP_200_OK,
-        )                                
+        )
+
+class UserLoginAPIView(TokenObtainPairView):
+    serializer_class = UserLoginSerializer
