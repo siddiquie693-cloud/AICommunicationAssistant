@@ -22,6 +22,7 @@ from .serializers import (
     ResetPasswordSerializer,
     EmailVerificationTokenSerializer,
     UserLoginSerializer,
+    ResendVerificationSerializer,
 )
 
 from django.contrib.auth import get_user_model
@@ -215,3 +216,34 @@ class ResetPasswordAPIView(APIView):
 
 class UserLoginAPIView(TokenObtainPairView):
     serializer_class = UserLoginSerializer
+
+class ResendVerificationAPIView(APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        serializer = ResendVerificationSerializer(
+            data=request.data,
+        )
+
+        serializer.is_valid(raise_exception=True)
+
+        user = serializer.user
+
+        if user:
+            token_serializer = EmailVerificationTokenSerializer()
+
+            verification_token = token_serializer.create_token(user)
+
+            send_email_verification_email(
+                user,
+                verification_token,
+            )
+        return Response(
+            {
+                "message": (
+                    "If an account exists with this email, "
+                    "a verification email has been sent."
+                )
+            },
+            status=status.HTTP_200_OK,
+        )    

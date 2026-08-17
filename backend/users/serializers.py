@@ -235,4 +235,24 @@ class UserLoginSerializer(TokenObtainPairSerializer):
                     )
                 }
             )
-        return data        
+        return data 
+
+class ResendVerificationSerializer(serializers.Serializer):
+    email = serializers.EmailField()
+
+    def validate_email(self, value):
+        from .models import User
+
+        user = User.objects.filter(
+            email=value,
+            is_active=True,
+        ).first()
+
+        if user and user.email_verified:
+            raise serializers.ValidationError(
+                "Email address is already verified."
+            )
+
+        self.user = user
+
+        return value           

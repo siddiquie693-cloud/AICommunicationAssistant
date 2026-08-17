@@ -3,7 +3,10 @@ from rest_framework.test import APITestCase
 from rest_framework import status
 from datetime import timedelta
 from django.utils import timezone
-from .models import PasswordResetToken
+from .models import (
+    EmailVerificationToken,
+    PasswordResetToken,
+)
 from unittest.mock import patch
 from django.test import TestCase
 from .services import (
@@ -15,6 +18,7 @@ from .serializers import (
     UserRegistrationSerializer,
     EmailVerificationTokenSerializer,
     PasswordResetTokenSerializer,
+    
 )
 
 User = get_user_model()
@@ -922,6 +926,169 @@ class EmailVerificationAPITestCase(APITestCase):
             response.status_code,
             status.HTTP_400_BAD_REQUEST,
         )
+
+class ResendVerificationAPITestCase(APITestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="resenduser",
+            email="resend@example.com",
+            password="StrongPass123",
+            email_verified=False,
+        )
+
+    @patch("users.views.send_email_verification_email")
+    def test_resend_verification_sends_email(
+        self,
+        mock_send_email,
+    ):
+        response = self.client.post(
+            "/api/auth/resend-verification/",
+            {
+                "email": "resend@example.com",
+            },
+            format="json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_200_OK,
+        )
+
+        self.assertEqual(
+            response.data["message"],
+            (
+                "If an account exists with this email, "
+                "a verification email has been sent."
+            ),
+        )
+
+        mock_send_email.assert_called_once()
+
+        called_user = mock_send_email.call_args.args[0]
+        called_token = mock_send_email.call_args.args[1]
+
+        self.assertEqual(
+            called_user,
+            self.user,
+        )
+
+        self.assertEqual(
+            called_token.user,
+            self.user,
+        )
+
+        self.assertFalse(
+            called_token.used,
+        ) 
+
+    def test_resend_verification_invalidates_old_token(self):
+        token_serializer = EmailVerificationTokenSerializer()
+
+        old_token = token_serializer.create_token(self.user)
+
+        response = self.client.post(
+            "/api/auth/resend-verification/",
+            {
+                "email": "resend@example.com",
+            },
+            format="json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_200_OK,
+        )
+
+        old_token.refresh_from_db()
+
+        self.assertTrue(
+            old_token.used,
+        )
+
+        self.assertEqual(
+            PasswordResetToken.objects.filter(
+                user=self.user,
+            ).count(),
+            0,
+        )
+
+        self.assertEqual(
+            EmailVerificationToken.objects.filter(
+                user=self.user,
+                used=False,
+            ).count(),
+            1,
+        )
+
+    def test_resend_verification_unknown_email(self):
+        response = self.client.post(
+            "/api/auth/resend-verification/",
+            {
+                "email": "unknown@example.com",
+            },
+            format="json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_200_OK,
+        )
+
+        self.assertEqual(
+            response.data["message"],
+            (
+                "If an account exists with this email, "
+                "a verification email has been sent."
+            ),
+        )
+
+    def test_resend_verification_already_verified(self):
+        self.user.email_verified = True
+        self.user.save(
+            update_fields=["email_verified"],
+        )
+
+        response = self.client.post(
+            "/api/auth/resend-verification/",
+            {
+                "email": "resend@example.com",
+            },
+            format="json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_400_BAD_REQUEST,
+        )
+
+        self.assertIn(
+            "email",
+            response.data,
+        )
+
+        self.assertEqual(
+            response.data["email"][0],
+            "Email address is already verified.",
+        )
+
+    def test_resend_verification_invalid_email(self):
+        response = self.client.post(
+            "/api/auth/resend-verification/",
+            {
+                "email": "not-an-email",
+            },
+            format="json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_400_BAD_REQUEST,
+        )
+
+        self.assertIn(
+            "email",
+            response.data,
+        )                   
 
 class PasswordResetTokenTestCase(APITestCase):
     def setUp(self):
