@@ -304,7 +304,7 @@ class UserLoginAPITestCase(APITestCase):
             {
                 "first_name": "Updated",
                 "last_name": "User",
-                "preferred_language": "Englis",
+                "preferred_language": "English",
                 "voice_language": "Hindi",
                 "timezone": "Asia/Kolkata",
             },

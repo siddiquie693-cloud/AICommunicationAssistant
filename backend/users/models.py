@@ -24,6 +24,22 @@ class User(AbstractUser):
         default="English",
     )
 
+    preferred_language_ref = models.ForeignKey(
+        "Language",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="preferred_by_users",
+    )
+
+    voice_language_ref = models.ForeignKey(
+        "Language",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="voice_users",
+    )
+
     timezone = models.CharField(
         max_length=100,
         default="UTC",
