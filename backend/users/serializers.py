@@ -3,7 +3,10 @@ from rest_framework import serializers
 from rest_framework_simplejwt.tokens import RefreshToken
 from datetime import timedelta
 from django.utils import timezone
-from .models import PasswordResetToken
+from .models import (
+    PasswordResetToken,
+    Language,
+)
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 
 User = get_user_model()
@@ -255,4 +258,14 @@ class ResendVerificationSerializer(serializers.Serializer):
 
         self.user = user
 
-        return value           
+        return value
+
+class LanguageSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Language
+        fields = [
+            "id",
+            "name",
+            "code",
+            "native_name",
+        ]

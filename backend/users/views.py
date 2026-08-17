@@ -4,7 +4,11 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated
 from rest_framework_simplejwt.views import TokenObtainPairView
-
+from .models import(
+    EmailVerificationToken,
+    PasswordResetToken,
+    Language,
+)
 from django.utils import timezone
 from .services import (
     send_email_verification_email,
@@ -23,6 +27,7 @@ from .serializers import (
     EmailVerificationTokenSerializer,
     UserLoginSerializer,
     ResendVerificationSerializer,
+    LanguageSerializer,
 )
 
 from django.contrib.auth import get_user_model
@@ -246,4 +251,22 @@ class ResendVerificationAPIView(APIView):
                 )
             },
             status=status.HTTP_200_OK,
-        )    
+        )
+
+class LanguageListAPIView(APIView):
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        languages = Language.objects.filter(
+            is_active=True,
+        ).order_by("name")
+
+        serializer = LanguageSerializer(
+            languages,
+            many=True,
+        )
+
+        return Response(
+            serializer.data,
+            status=status.HTTP_200_OK,
+        )       

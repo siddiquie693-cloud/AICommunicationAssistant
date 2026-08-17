@@ -6,6 +6,7 @@ from django.utils import timezone
 from .models import (
     EmailVerificationToken,
     PasswordResetToken,
+    Language,
 )
 from unittest.mock import patch
 from django.test import TestCase
@@ -1406,3 +1407,96 @@ class EmailServiceTestCase(TestCase):
             str(token.token),
             call_kwargs["message"],
         )
+
+class LanguageListAPITestCase(APITestCase):
+    def setUp(self):
+        self.active_language = Language.objects.create(
+            name="Test English",
+            code="test-en",
+            native_name="Test English",
+            is_active=True,
+        )
+
+        self.second_active_language = Language.objects.create(
+            name="Test Hindi",
+            code='test-hi',
+            native_name="परीक्षण हिन्दी",
+            is_active=True,
+        )
+
+        self.inactive_language = Language.objects.create(
+            name="Test French",
+            code="test-fr",
+            native_name="Test Francias",
+            is_active=False,      
+        )
+
+    def test_language_list_returns_active_languages(self):
+        response = self.client.get(
+            "/api/auth/languages/",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_200_OK,
+        )
+
+        returned_codes = [
+            language["code"]
+            for language in response.data
+        ]
+
+        self.assertIn(
+            "test-en",
+            returned_codes,
+        )
+
+        self.assertIn(
+            "test-hi",
+            returned_codes,
+        )
+
+        self.assertNotIn(
+            "test-fr",
+            returned_codes,
+        )
+
+    def test_inactive_language_is_not_returned(self):
+        response = self.client.get(
+            "/api/auth/languages/",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_200_OK,
+        )
+
+        returned_codes = [
+            language["code"]
+            for language in response.data
+        ]
+
+        self.assertNotIn(
+            "test-fr",
+            returned_codes,
+        )
+
+    def test_language_list_is_ordered_by_name(self):
+        response = self.client.get(
+            "/api/auth/languages/",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_200_OK,
+        )
+
+        names = [
+            language["name"]
+            for language in response.data
+        ]
+
+        self.assertEqual(
+            names,
+            sorted(names),
+        )            
