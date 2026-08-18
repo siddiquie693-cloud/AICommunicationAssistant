@@ -3,6 +3,7 @@ from django.urls import path
 from .views import (
     ConversationDetailAPIView,
     ConversationListCreateAPIView,
+    MessageListCreateAPIView,
 )
 
 urlpatterns = [
@@ -13,5 +14,10 @@ urlpatterns = [
     path("<int:pk>/",
         ConversationDetailAPIView.as_view(),
         name="conversation-detail",
+    ),
+    path(
+        "<int:conversation_id>/messages/",
+        MessageListCreateAPIView.as_view(),
+        name="message-list-create",
     ),
 ]

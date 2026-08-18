@@ -3,7 +3,7 @@ from django.test import TestCase
 from rest_framework import status
 from rest_framework.test import APITestCase
 
-from .models import Conversation
+from .models import Conversation, Message
 
 User = get_user_model()
 
@@ -232,4 +232,134 @@ class ConversationAPItestCase(APITestCase):
         self.assertEqual(
             response.status_code,
             status.HTTP_401_UNAUTHORIZED,
-        )                           
+        )  
+
+class MessageListCreateAPITestCase(APITestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="messageuser",
+            email="messageuser@example.com",
+            password="StrongPass123",
+        )
+
+        self.other_user = User.objects.create_user(
+            username="othermessageuser",
+            email="othermessageuser@example.com",
+            password="StrongPass123",
+        )
+
+        self.conversation = Conversation.objects.create(
+            user=self.user,
+            title="Message Test Conversation",
+        )
+
+        self.other_conversation = Conversation.objects.create(
+            user=self.other_user,
+            title="Other User Conversation",
+        )
+
+        self.client.force_authenticate(
+            user=self.user
+        )
+
+    def test_list_messages(self):
+        Message.objects.create(
+            conversation=self.conversation,
+            sender_type=Message.SENDER_USER,
+            content="Hello",
+        )
+
+        Message.objects.create(
+            conversation=self.conversation,
+            sender_type=Message.SENDER_ASSISTANT,
+            content="Hi! How can I help?",
+        ) 
+
+        response = self.client.get(
+            f"/api/conversations/{self.conversation.id}/messages/"
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_200_OK,
+        )
+
+        self.assertEqual(len(response.data), 2)
+
+        self.assertEqual(
+            response.data[0]["content"],
+            "Hello",
+        )
+
+        self.assertEqual(
+            response.data[1]["sender_type"],
+            Message.SENDER_ASSISTANT,
+        ) 
+
+    def test_create_user_message(self):
+        data = {
+            "sender_type": Message.SENDER_USER,
+            "content": "Hello, I need help.",
+        }
+
+        response = self.client.post(
+            f"/api/conversations/{self.conversation.id}/messages/",
+            data,
+            format="json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_201_CREATED,
+        )  
+
+        self.assertEqual(
+            response.data["sender_type"],
+            Message.SENDER_USER,
+        )   
+
+        self.assertEqual(
+            response.data["content"],
+            "Hello, I need help.",
+        )
+
+        self.assertTrue(
+            Message.objects.filter(
+                conversation=self.conversation,
+                content="Hello, I need help.",
+            ).exists()
+        )
+
+    def test_cannot_access_other_users_conversation(self):
+        response = self.client.get(
+            f"/api/conversations/{self.other_conversation.id}/messages/"
+        )    
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_404_NOT_FOUND,
+        )
+
+    def test_cannot_create_message_in_other_users_conversation(self):
+        data = {
+            "sender_type": Message.SENDER_USER,
+            "content": "This should not be allowed.",
+        } 
+
+        response = self.client.post(
+            f"/api/conversations/{self.other_conversation.id}/messages/",
+            data,
+            format="json",
+        ) 
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_404_NOT_FOUND,
+        )  
+
+        self.assertFalse(
+            Message.objects.filter(
+                conversation=self.other_conversation,
+                content="This should not be allowed.",
+            ).exists()
+        )

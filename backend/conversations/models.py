@@ -22,3 +22,36 @@ class Conversation(models.Model):
 
     def __str__(self):
         return self.title
+
+class Message(models.Model):
+    SENDER_USER = "user"
+    SENDER_ASSISTANT = "assistant"
+
+    SENDER_TYPE_CHOICES = [
+        (SENDER_USER, "User"),
+        (SENDER_ASSISTANT, "Assistant"),
+    ]
+
+    conversation = models.ForeignKey(
+        Conversation,
+        on_delete=models.CASCADE,
+        related_name="messages",
+    )
+
+    sender_type = models.CharField(
+        max_length=20,
+        choices=SENDER_TYPE_CHOICES,
+    )
+
+    content = models.TextField()
+
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+    ) 
+
+    updated_at = models.DateTimeField(
+        auto_now=True,
+    ) 
+
+    def __str__(self):
+        return f"{self.sender_type}: {self.content[:50]}"  
