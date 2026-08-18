@@ -16,6 +16,21 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
         write_only=True,
         min_length=8,
     )
+    preferred_language = serializers.SlugRelatedField(
+        source="preferred_language_ref",
+        slug_field="code",
+        queryset=Language.objects.filter(is_active=True),
+        required=False,
+        allow_null=True,
+    )
+
+    voice_language = serializers.SlugRelatedField(
+        source="voice_language_ref",
+        slug_field="code",
+        queryset=Language.objects.filter(is_active=True),
+        required=False,
+        allow_null=True,
+    )
 
     class Meta:
         model = User
@@ -32,41 +47,7 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ["id"]
 
-    def validate(self, attrs):
-        preferred_language = attrs.get("preferred_language")
-        voice_language = attrs.get("voice_language")
-
-        if preferred_language:
-            try:
-                attrs["preferred_language_ref"] = Language.objects.get(
-                    name=preferred_language,
-                    is_active=True,
-                )
-            except Language.DoesNotExist:
-                raise serializers.ValidationError(
-                    {
-                        "preferred_language": (
-                            "Unsupported preferred language."
-                        )
-                    }
-                )
-
-            if voice_language:
-                try:
-                    attrs["voice_language_ref"] = Language.objects.get(
-                        name=voice_language,
-                        is_active=True,
-                    )
-                except Language.DoesNotExist:
-                    raise serializers.ValidationError(
-                        {
-                            "voice_language": (
-                                "Unsupported voice language."
-                            )
-                        }
-                    )
-            return attrs                
-
+    
     def create(self, validated_data):
         password = validated_data.pop("password")
 
@@ -87,6 +68,22 @@ class LogoutSerializer(serializers.Serializer):
         self.token.blacklist()
 
 class UserProfileSerializer(serializers.ModelSerializer):
+    preferred_language = serializers.SlugRelatedField(
+        source="preferred_language_ref",
+        slug_field="code",
+        queryset=Language.objects.filter(is_active=True),
+        required=False,
+        allow_null=True,
+    )
+
+    voice_language = serializers.SlugRelatedField(
+        source="voice_language_ref",
+        slug_field="code",
+        queryset=Language.objects.filter(is_active=True),
+        required=False,
+        allow_null=True,
+    )
+
     preferred_language_code = serializers.CharField(
         source="preferred_language_ref.code",
         read_only=True,
@@ -96,40 +93,6 @@ class UserProfileSerializer(serializers.ModelSerializer):
         source="voice_language_ref.code",
         read_only=True,
     )
-
-    def validate(self, attrs):
-        preferred_language = attrs.get("preferred_language")
-        voice_language = attrs.get("voice_language")
-
-        if preferred_language:
-            try:
-                attrs["preferred_language_ref"] = Language.objects.get(
-                    name=preferred_language,
-                    is_active=True,
-                )
-            except Language.DoesNotExist:
-                raise serializers.ValidationError(
-                    {
-                        "preferred_language": (
-                            "Unsupported preferred language."
-                        )
-                    }
-                )
-        if voice_language:
-            try:
-                attrs["voice_language_ref"] = Language.objects.get(
-                    name=voice_language,
-                    is_active=True,
-                )
-            except Language.DoesNotExist:
-                raise serializers.ValidationError(
-                    {
-                        "voice_language": (
-                            "Unsupported voice language."
-                        )
-                    }
-                )
-        return attrs            
 
     class Meta:
         model = User
@@ -152,7 +115,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
             "preferred_language_code",
             "voice_language_code",
         ]
-
+  
 class ChangePasswordSerializer(serializers.Serializer):
     old_password = serializers.CharField(
         write_only=True,

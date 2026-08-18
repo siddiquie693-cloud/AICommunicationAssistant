@@ -304,8 +304,8 @@ class UserLoginAPITestCase(APITestCase):
             {
                 "first_name": "Updated",
                 "last_name": "User",
-                "preferred_language": "English",
-                "voice_language": "Hindi",
+                "preferred_language": "en",
+                "voice_language": "hi",
                 "timezone": "Asia/Kolkata",
             },
             format="json",
@@ -323,7 +323,7 @@ class UserLoginAPITestCase(APITestCase):
 
         self.assertEqual(
             response.data["voice_language"],
-            "Hindi",
+            "hi",
         )
 
         self.assertEqual(
@@ -341,8 +341,8 @@ class UserLoginAPITestCase(APITestCase):
         )
 
         self.assertEqual(
-            user.voice_language,
-            "Hindi",
+            user.voice_language_ref.code,
+            "hi",
         )
 
     def test_profile_cannot_update_username_or_email(self):
@@ -609,8 +609,8 @@ class UserRegistrationSerializerTestCase(APITestCase):
             "password": "StrongPass123",
             "first_name": "Sahil",
             "last_name": "Siddiquie",
-            "preferred_language": "English",
-            "voice_language": "Hindi",
+            "preferred_language": "en",
+            "voice_language": "hi",
             "timezone": "Asia/KolKata",
         }
 
@@ -621,7 +621,7 @@ class UserRegistrationSerializerTestCase(APITestCase):
 
         self.assertEqual(user.email, "sahil@786.com")
         self.assertEqual(user.first_name, "Sahil")
-        self.assertEqual(user.preferred_language, "English")
+        self.assertEqual(user.preferred_language_ref.code, "en")
 
         # Password must be stored as plain text.
         self.assertNotEqual(user.password, "StrongPass123")
@@ -651,8 +651,8 @@ class UserRegistrationAPITestCase(APITestCase):
             "password": "StrongPass123",
             "first_name": "API",
             "last_name": "User",
-            "preferred_language": "English",
-            "voice_language": "Hindi",
+            "preferred_language": "en",
+            "voice_language": "hi",
             "timezone": "Asia/Kolkata",
         }
 
@@ -691,8 +691,8 @@ class UserRegistrationAPITestCase(APITestCase):
             "password": "StrongPass123",
             "first_name": "Email",
             "last_name": "Test",
-            "preferred_language": "English",
-            "voice_language": "Hindi",
+            "preferred_language": "en",
+            "voice_language": "hi",
             "timezone": "Asia/Kolkata",
         }
 

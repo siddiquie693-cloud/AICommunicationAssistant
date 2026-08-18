@@ -14,16 +14,6 @@ class User(AbstractUser):
         blank=True,
     )
 
-    preferred_language = models.CharField(
-        max_length=50,
-        default="English",
-    )
-
-    voice_language = models.CharField(
-        max_length=50,
-        default="English",
-    )
-
     preferred_language_ref = models.ForeignKey(
         "Language",
         on_delete=models.SET_NULL,
