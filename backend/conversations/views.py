@@ -18,9 +18,23 @@ class ConversationListCreateAPIView(generics.ListCreateAPIView):
     pagination_class = ConversationPagination
 
     def get_queryset(self):
-        return Conversation.objects.filter(
+        queryset = Conversation.objects.filter(
             user=self.request.user
-        ).order_by("-created_at")
+        )
+
+        archived = self.request.query_params.get(
+            "archived"
+        )
+
+        if archived == "true":
+            queryset = queryset.filter(
+                is_archived=True
+            )
+        else:
+            queryset = queryset.filter(
+                is_archived=False
+            )    
+        return queryset.order_by("-created_at")    
 
     def perform_create(self, serializer):
         serializer.save(

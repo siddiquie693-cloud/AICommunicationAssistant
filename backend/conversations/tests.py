@@ -312,7 +312,162 @@ class ConversationAPItestCase(APITestCase):
         self.assertEqual(
             response.status_code,
             status.HTTP_401_UNAUTHORIZED,
-        )  
+        ) 
+
+    def test_archive_own_conversation(self):
+        conversation = Conversation.objects.create(
+            user=self.user,
+            title="Archive Me",
+        )     
+
+        response = self.client.patch(
+            f"/api/conversations/{conversation.id}/",
+            {
+                "is_archived": True,
+            },
+            format="json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_200_OK,
+        )
+
+        conversation.refresh_from_db()
+
+        self.assertTrue(
+            conversation.is_archived
+        )
+
+        self.assertTrue(
+            response.data["is_archived"]
+        )
+
+    def test_unarchive_own_conversation(self):
+        conversation = Conversation.objects.create(
+            user=self.user,
+            title="Unarchive Me",
+            is_archived=True,
+        )    
+
+        response = self.client.patch(
+            f"/api/conversations/{conversation.id}/",
+            {
+                "is_archived": False,
+            },
+            format="json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_200_OK,
+        )
+
+        conversation.refresh_from_db()
+
+        self.assertFalse(
+            conversation.is_archived
+        )
+
+        self.assertFalse(
+            response.data["is_archived"]
+        )
+
+    def test_list_excludes_archived_conversations_by_default(self):
+        Conversation.objects.create(
+            user=self.user,
+            title="Active Conversation",
+            is_archived=False,
+        )    
+
+        Conversation.objects.create(
+            user=self.user,
+            title="Archived Conversation",
+            is_archived=True,
+        )
+
+        response = self.client.get(
+            "/api/conversations/"
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_200_OK,
+        )
+
+        self.assertEqual(
+            response.data["count"],
+            1,
+        )
+
+        self.assertEqual(
+            response.data["results"][0]["title"],
+            "Active Conversation",
+        )
+
+    def test_list_archived_conversations(self):
+        Conversation.objects.create(
+            user=self.user,
+            title="Active Conversation",
+            is_archived=False,
+        )    
+
+        Conversation.objects.create(
+            user=self.user,
+            title="Archived Conversation",
+            is_archived=True,
+        )
+
+        response = self.client.get(
+            "/api/conversations/?archived=true"
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_200_OK,
+        )
+
+        self.assertEqual(
+            response.data["count"],
+            1,
+        )
+
+        self.assertEqual(
+            response.data["results"][0]["title"],
+            "Archived Conversation",
+        )
+
+    def test_list_active_conversations(self):
+        Conversation.objects.create(
+            user=self.user,
+            title="Active Conversation",
+            is_archived=False,
+        )    
+
+        Conversation.objects.create(
+            user=self.user,
+            title="Archived Conversation",
+            is_archived=True,
+        )
+
+        response = self.client.get(
+            "/api/conversations/?archived=false"
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_200_OK,
+        )
+
+        self.assertEqual(
+            response.data["count"],
+            1,
+        )
+
+        self.assertEqual(
+            response.data["results"][0]["title"],
+            "Active Conversation",
+        )
 
 class MessageListCreateAPITestCase(APITestCase):
     def setUp(self):
