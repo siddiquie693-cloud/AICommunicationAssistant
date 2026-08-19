@@ -549,6 +549,96 @@ class ConversationAPItestCase(APITestCase):
             0,
         )
 
+    def test_conversation_list_can_order_oldest_first(self):
+        first = Conversation.objects.create(
+            user=self.user,
+            title="First Conversation",
+        )    
+
+        second = Conversation.objects.create(
+            user=self.user,
+            title="Second Conversation",
+        )
+
+        response = self.client.get(
+            "/api/conversations/?ordering=created_at"
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_200_OK,
+        )
+
+        self.assertEqual(
+            response.data["results"][0]["id"],
+            first.id,
+        )
+
+        self.assertEqual(
+            response.data["results"][1]["id"],
+            second.id,
+        )
+
+    def test_conversation_list_can_order_newest_first(self):
+        first = Conversation.objects.create(
+            user=self.user,
+            title="First Conversation",
+        )    
+
+        second = Conversation.objects.create(
+            user=self.user,
+            title="Second Conversation",
+        )
+
+        response = self.client.get(
+            "/api/conversations/?ordering=-created_at"
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_200_OK,
+        )
+
+        self.assertEqual(
+            response.data["results"][0]["id"],
+            second.id,
+        )
+
+        self.assertEqual(
+            response.data["results"][1]["id"],
+            first.id,
+        )
+
+    def test_invalid_conversation_ordering_defaults_to_newest(self):
+        first = Conversation.objects.create(
+            user=self.user,
+            title="First Conversation",
+        )    
+
+        second = Conversation.objects.create(
+            user=self.user,
+            title="Second Conversation",
+        )
+
+        response = self.client.get(
+            "/api/conversations/?ordering=invalid"
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_200_OK,
+        )
+
+        self.assertEqual(
+            response.data["results"][0]["id"],
+            second.id,
+        )
+
+        self.assertEqual(
+            response.data["results"][1]["id"],
+            first.id,
+        )
+
 class MessageListCreateAPITestCase(APITestCase):
     def setUp(self):
         self.user = User.objects.create_user(
