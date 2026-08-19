@@ -131,13 +131,93 @@ class ConversationAPItestCase(APITestCase):
         )
 
         self.assertEqual(
-            len(response.data),
+            len(response.data["results"]),
             1,
         )
 
         self.assertEqual(
-            response.data[0]["title"],
+            response.data["results"][0]["title"],
             "My Conversation",
+        )
+
+    def test_conversation_list_is_paginated(self):
+        for index in range(15):
+            Conversation.objects.create(
+                user=self.user,
+                title=f"Conversation {index}",
+            )    
+
+        response = self.client.get(
+            "/api/conversations/"
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_200_OK,
+        )
+
+        self.assertEqual(
+            response.data["count"],
+            15,
+        )
+
+        self.assertEqual(
+            len(response.data["results"]),
+            10,
+        )
+
+        self.assertIsNotNone(
+            response.data["next"]
+        )
+
+    def test_conversation_page_size_can_be_changed(self):
+        for index in range(15):
+            Conversation.objects.create(
+                user=self.user,
+                title=f"Conversation {index}",
+            )        
+        response = self.client.get(
+            "/api/conversations/?page_size=5"
+        )    
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_200_OK,
+        )
+
+        self.assertEqual(
+            response.data["count"],
+            15,
+        )
+
+        self.assertEqual(
+            len(response.data["results"]),
+            5,
+        )
+
+    def test_conversation_page_size_cannot_exceed_maximum(self):
+        for index in range(60):
+            Conversation.objects.create(
+                user=self.user,
+                title=f"Conversation {index}",
+            )    
+        response = self.client.get(
+            "/api/conversations/?page_size=100"
+        )    
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_200_OK,
+        )
+
+        self.assertEqual(
+            response.data["count"],
+            60,
+        )
+
+        self.assertEqual(
+            len(response.data["results"]),
+            50,
         )
 
     def test_retrieve_own_conversation(self):

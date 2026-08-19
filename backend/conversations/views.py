@@ -3,6 +3,7 @@ from rest_framework.permissions import IsAuthenticated
 from django.shortcuts import get_object_or_404
 
 from .models import Conversation, Message
+from .pagination import ConversationPagination
 from .serializers import (
     ConversationSerializer,
     MessageSerializer,
@@ -11,6 +12,7 @@ from .serializers import (
 class ConversationListCreateAPIView(generics.ListCreateAPIView):
     serializer_class = ConversationSerializer
     permission_classes = [IsAuthenticated]
+    pagination_class = ConversationPagination
 
     def get_queryset(self):
         return Conversation.objects.filter(
