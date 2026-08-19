@@ -701,6 +701,90 @@ class MessageListCreateAPITestCase(APITestCase):
             50,
         )
 
+    def test_search_messages_by_content(self):
+        Message.objects.create(
+            conversation=self.conversation,
+            sender_type=Message.SENDER_USER,
+            content="Hello, how are you?",
+        )    
+
+        Message.objects.create(
+            conversation=self.conversation,
+            sender_type=Message.SENDER_USER,
+            content="Tell me about Python.",
+        )
+
+        response = self.client.get(
+            f"/api/conversations/{self.conversation.id}/messages/?search=Python"
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_200_OK,
+        )
+
+        self.assertEqual(
+            response.data["count"],
+            1,
+        )
+
+        self.assertEqual(
+            response.data["results"][0]["content"],
+            "Tell me about Python.",
+        )
+
+    def test_search_messages_is_case_insensitive(self):
+        Message.objects.create(
+            conversation=self.conversation,
+            sender_type=Message.SENDER_USER,
+            content="Hello Python Developer",
+        )    
+
+        response = self.client.get(
+            f"/api/conversations/{self.conversation.id}/messages/?search=python"
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_200_OK,
+        )
+
+        self.assertEqual(
+            response.data["count"],
+            1,
+        )
+
+        self.assertEqual(
+            response.data["results"][0]["content"],
+            "Hello Python Developer",
+        )
+
+    def test_search_messages_returns_empty_when_no_match(self):
+        Message.objects.create(
+            conversation=self.conversation,
+            sender_type=Message.SENDER_USER,
+            content="Hello, how are you?",
+        )    
+
+        response = self.client.get(
+            f"/api/conversations/{self.conversation.id}/messages/?search=Java"
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_200_OK,
+        )
+
+        self.assertEqual(
+            response.data["count"],
+            0,
+        )
+
+        self.assertEqual(
+            len(response.data["results"]),
+            0,
+        )
+
     def test_create_user_message(self):
         data = {
             "sender_type": Message.SENDER_USER,

@@ -43,7 +43,7 @@ class ConversationListCreateAPIView(generics.ListCreateAPIView):
             queryset = queryset.filter(
                 title__icontains=search
             )
-            
+
         return queryset.order_by("-created_at")    
 
     def perform_create(self, serializer):
@@ -75,9 +75,17 @@ class MessageListCreateAPIView(generics.ListCreateAPIView):
     def get_queryset(self):
         conversation = self.get_conversation()
 
-        return conversation.messages.order_by(
-            "created_at"
+        queryset = conversation.messages.all()
+
+        search = self.request.query_params.get(
+            "search"
         )
+
+        if search:
+            queryset = queryset.filter(
+                content__icontains=search
+            )
+        return queryset.order_by("created_at")    
 
     def perform_create(self, serializer):
         conversation = self.get_conversation()
