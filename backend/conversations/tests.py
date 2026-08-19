@@ -534,6 +534,84 @@ class MessageListCreateAPITestCase(APITestCase):
             ).exists()
         )
 
+    def test_create_message_rejects_empty_content(self):
+        data = {
+            "sender_type": Message.SENDER_USER,
+            "content": "",
+        }    
+
+        response = self.client.post(
+            f"/api/conversations/{self.conversation.id}/messages/",
+            data,
+            format="json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_400_BAD_REQUEST,
+        )
+
+    def test_create_message_rejects_whitespace_content(self):
+        data = {
+            "sender_type": Message.SENDER_USER,
+            "content": " ",
+        }    
+
+        response = self.client.post(
+            f"/api/conversations/{self.conversation.id}/messages/",
+            data,
+            format="json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_400_BAD_REQUEST,
+        )
+
+    def test_create_strips_content_whitespace(self):
+        data = {
+            "sender_type": Message.SENDER_USER,
+            "content": " Hello there ",
+        }    
+        response = self.client.post(
+            f"/api/conversations/{self.conversation.id}/messages/",
+            data,
+            format="json",
+        )
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_201_CREATED,
+        )
+
+        self.assertEqual(
+            response.data["content"],
+            "Hello there",
+        )
+
+    def test_create_message_rejects_invalid_sender_type(self):
+        data = {
+            "sender_type": "invalid",
+            "content": "This should be rejected.",
+        }    
+
+        response = self.client.post(
+            f"/api/conversations/{self.conversation.id}/messages/",
+            data,
+            format="json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_400_BAD_REQUEST,
+        )
+
+        self.assertFalse(
+            Message.objects.filter(
+                conversation=self.conversation,
+                content="This should be rejected.",
+            ).exists()
+        )
+
 class MessageDetailAPITestCase(APITestCase):
     def setUp(self):
         self.user = User.objects.create_user(

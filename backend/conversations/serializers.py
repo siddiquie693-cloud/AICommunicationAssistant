@@ -30,3 +30,12 @@ class MessageSerializer(serializers.ModelSerializer):
             "created_at",
             "updated_at",
         ]
+
+    def validate_content(self, value):
+        value = value.strip()
+
+        if not value:
+            raise serializers.ValidationError(
+                "Message content cannot be empty."
+            )    
+        return value
