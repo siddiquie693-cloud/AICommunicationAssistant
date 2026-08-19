@@ -4,6 +4,7 @@ from .views import (
     ConversationDetailAPIView,
     ConversationListCreateAPIView,
     MessageListCreateAPIView,
+    MessageDetailAPIView,
 )
 
 urlpatterns = [
@@ -19,5 +20,10 @@ urlpatterns = [
         "<int:conversation_id>/messages/",
         MessageListCreateAPIView.as_view(),
         name="message-list-create",
+    ),
+    path(
+        "<int:conversation_id>/messages/<int:pk>/",
+        MessageDetailAPIView.as_view(),
+        name="message-detail",
     ),
 ]

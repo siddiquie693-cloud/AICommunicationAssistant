@@ -363,3 +363,154 @@ class MessageListCreateAPITestCase(APITestCase):
                 content="This should not be allowed.",
             ).exists()
         )
+
+class MessageDetailAPITestCase(APITestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="detailuser",
+            email="detailuser@example.com",
+            password="StrongPass123",
+        )
+
+        self.other_user = User.objects.create_user(
+            username="otherdetailuser",
+            email="otherdetailuser@example.com",
+            password="StrongPass123",
+        )
+
+        self.conversation = Conversation.objects.create(
+            user=self.user,
+            title="Detail Test Conversation",
+        )
+
+        self.other_conversation = Conversation.objects.create(
+            user=self.other_user,
+            title="Other User Conversation",
+        )
+
+        self.message = Message.objects.create(
+            conversation=self.conversation,
+            sender_type=Message.SENDER_USER,
+            content="Original message",
+        )
+
+        self.other_message = Message.objects.create(
+            conversation=self.other_conversation,
+            sender_type=Message.SENDER_USER,
+            content="Other user's message",
+        )
+        self.client.force_authenticate(
+            user=self.user,
+        )
+
+    def test_retrieve_message(self):
+        response = self.client.get(
+            f"/api/conversations/{self.conversation.id}/messages/{self.message.id}/"
+        )    
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_200_OK,
+        )
+
+        self.assertEqual(
+            response.data["id"],
+            self.message.id,
+        )
+
+        self.assertEqual(
+            response.data["content"],
+            "Original message",
+        )
+
+    def test_update_message(self):
+        data = {
+            "content": "Updated message",
+        }    
+        response = self.client.patch(
+            f"/api/conversations/{self.conversation.id}/messages/{self.message.id}/",
+            data,
+            format="json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_200_OK,
+        )
+
+        self.assertEqual(
+            response.data["content"],
+            "Updated message",
+        )
+
+        self.message.refresh_from_db()
+
+        self.assertEqual(
+            self.message.content,
+            "Updated message",
+        )
+
+    def test_delete_message(self):
+        response = self.client.delete(
+            f"/api/conversations/{self.conversation.id}/messages/{self.message.id}/"
+        )    
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_204_NO_CONTENT,
+        )
+
+        self.assertFalse(
+            Message.objects.filter(
+                id=self.message.id
+            ).exists()
+        )
+
+    def test_cannot_retrieve_other_users_message(self):
+        response = self.client.get(
+            f"/api/conversations/{self.other_conversation.id}/messages/{self.other_message.id}/"
+        )    
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_404_NOT_FOUND,
+        )
+
+    def test_cannot_update_other_users_message(self):
+        data = {
+            "content": "Unauthorized update",
+        }    
+
+        response = self.client.patch(
+            f"/api/conversations/{self.other_conversation.id}/messages/{self.other_message.id}/",
+            data,
+            format="json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_404_NOT_FOUND,
+        )
+
+        self.other_message.refresh_from_db()
+
+        self.assertEqual(
+            self.other_message.content,
+            "Other user's message",
+        )
+
+    def test_cannot_delete_other_users_message(self):
+        response = self.client.delete(
+            f"/api/conversations/{self.other_conversation.id}/messages/{self.other_message.id}/"
+        )    
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_404_NOT_FOUND,
+        )
+
+        self.assertTrue(
+            Message.objects.filter(
+                id=self.other_message.id
+            ).exists()
+        )

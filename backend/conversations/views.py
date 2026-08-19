@@ -55,3 +55,13 @@ class MessageListCreateAPIView(generics.ListCreateAPIView):
         serializer.save(
             conversation=conversation,
         )    
+
+class MessageDetailAPIView(generics.RetrieveUpdateDestroyAPIView):
+    serializer_class = MessageSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        return Message.objects.filter(
+            conversation__user=self.request.user,
+            conversation_id=self.kwargs["conversation_id"],
+        )
