@@ -33,7 +33,17 @@ class ConversationListCreateAPIView(generics.ListCreateAPIView):
         else:
             queryset = queryset.filter(
                 is_archived=False
-            )    
+            ) 
+
+        search = self.request.query_params.get(
+            "search"
+        )       
+
+        if search:
+            queryset = queryset.filter(
+                title__icontains=search
+            )
+            
         return queryset.order_by("-created_at")    
 
     def perform_create(self, serializer):

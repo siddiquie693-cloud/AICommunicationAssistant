@@ -469,6 +469,86 @@ class ConversationAPItestCase(APITestCase):
             "Active Conversation",
         )
 
+    def test_search_conversations_by_title(self):
+        Conversation.objects.create(
+            user=self.user,
+            title="Python Backend Project",
+        )    
+
+        Conversation.objects.create(
+            user=self.user,
+            title="AI Communication Assistant",
+        )
+
+        response = self.client.get(
+            "/api/conversations/?search=Python"
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_200_OK,
+        )
+
+        self.assertEqual(
+            response.data["count"],
+            1,
+        )
+
+        self.assertEqual(
+            response.data["results"][0]["title"],
+            "Python Backend Project",
+        )
+
+    def test_search_conversations_is_case_insensitive(self):
+        Conversation.objects.create(
+            user=self.user,
+            title="Python Backend Project",
+        )    
+
+        response = self.client.get(
+            "/api/conversations/?search=python"
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_200_OK,
+        )
+
+        self.assertEqual(
+            response.data["count"],
+            1,
+        )
+
+        self.assertEqual(
+            response.data["results"][0]["title"],
+            "Python Backend Project",
+        )
+
+    def test_search_conversations_returns_empty_when_no_match(self):
+        Conversation.objects.create(
+            user=self.user,
+            title="Python Backend Project",
+        )    
+
+        response = self.client.get(
+            "/api/conversations/?search=Java"
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_200_OK,
+        )
+
+        self.assertEqual(
+            response.data["count"],
+            0,
+        )
+
+        self.assertEqual(
+            len(response.data["results"]),
+            0,
+        )
+
 class MessageListCreateAPITestCase(APITestCase):
     def setUp(self):
         self.user = User.objects.create_user(
