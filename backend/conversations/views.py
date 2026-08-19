@@ -3,7 +3,10 @@ from rest_framework.permissions import IsAuthenticated
 from django.shortcuts import get_object_or_404
 
 from .models import Conversation, Message
-from .pagination import ConversationPagination
+from .pagination import (
+    ConversationPagination,
+    MessagePagination,
+)
 from .serializers import (
     ConversationSerializer,
     MessageSerializer,
@@ -36,6 +39,7 @@ class ConversationDetailAPIView(generics.RetrieveUpdateDestroyAPIView):
 class MessageListCreateAPIView(generics.ListCreateAPIView):
     serializer_class = MessageSerializer
     permission_classes = [IsAuthenticated]
+    pagination_class = MessagePagination
 
     def get_conversation(self):
         return get_object_or_404(

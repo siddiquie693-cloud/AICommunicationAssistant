@@ -364,17 +364,107 @@ class MessageListCreateAPITestCase(APITestCase):
             status.HTTP_200_OK,
         )
 
-        self.assertEqual(len(response.data), 2)
+        self.assertEqual(
+            response.data["count"],
+            2,
+        )
 
         self.assertEqual(
-            response.data[0]["content"],
+            len(response.data["results"]),
+            2,
+        )
+
+        self.assertEqual(
+            response.data["results"][0]["content"],
             "Hello",
         )
 
         self.assertEqual(
-            response.data[1]["sender_type"],
+            response.data["results"][1]["sender_type"],
             Message.SENDER_ASSISTANT,
-        ) 
+        )
+
+    def test_message_list_is_paginated(self):
+        for index in range(15):
+            Message.objects.create(
+                conversation=self.conversation,
+                sender_type=Message.SENDER_USER,
+                content=f"Message {index}",
+            )
+        response = self.client.get(
+            f"/api/conversations/{self.conversation.id}/messages/"
+        )         
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_200_OK,
+        )
+
+        self.assertEqual(
+            response.data["count"],
+            15,
+        )
+
+        self.assertEqual(
+            len(response.data["results"]),
+            10,
+        )
+
+        self.assertIsNotNone(
+            response.data["next"]
+        )
+
+    def test_message_page_size_can_be_changed(self):
+        for index in range(15):
+            Message.objects.create(
+                conversation=self.conversation,
+                sender_type=Message.SENDER_USER,
+                content=f"Message {index}",
+            )    
+        response = self.client.get(
+            f"/api/conversations/{self.conversation.id}/messages/?page_size=5"
+        )    
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_200_OK,
+        )
+
+        self.assertEqual(
+            response.data["count"],
+            15,
+        )
+
+        self.assertEqual(
+            len(response.data["results"]),
+            5,
+        )
+
+    def test_message_page_size_cannot_exceed_maximum(self):
+        for index in range(60):
+            Message.objects.create(
+                conversation=self.conversation,
+                sender_type=Message.SENDER_USER,
+                content=f"Message {index}",
+            )    
+        response = self.client.get(
+            f"/api/conversations/{self.conversation.id}/messages/?page_size=100"
+        )    
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_200_OK,
+        )
+
+        self.assertEqual(
+            response.data["count"],
+            60,
+        )
+
+        self.assertEqual(
+            len(response.data["results"]),
+            50,
+        )
 
     def test_create_user_message(self):
         data = {
