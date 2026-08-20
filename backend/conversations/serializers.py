@@ -14,6 +14,14 @@ class ConversationSerializer(serializers.ModelSerializer):
             "id",
             "created_at",
         ]
+    def validate_title(self, value):
+        value = value.strip()
+
+        if not value:
+            raise serializers.ValidationError(
+                "Conversation title cannot be empty."
+            )    
+        return value
 
 class MessageSerializer(serializers.ModelSerializer):
     class Meta:

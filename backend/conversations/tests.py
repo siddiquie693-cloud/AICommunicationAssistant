@@ -281,6 +281,150 @@ class ConversationAPItestCase(APITestCase):
             "Updated Title",
         )
 
+    def test_create_conversation_rejects_empty_title(self):
+        response = self.client.post(
+            "/api/conversations/",
+            {
+                "title": "",
+            },
+            format="json",
+        )    
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_400_BAD_REQUEST,
+        )
+
+        self.assertFalse(
+            Conversation.objects.filter(
+                user=self.user,
+                title="",
+            ).exists()
+        )
+
+    def test_create_conversation_rejects_whitespace_title(self):
+        response = self.client.post(
+            "/api/conversations/",
+            {
+                "title": "  ",
+            },
+            format="json",
+        )    
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_400_BAD_REQUEST,
+        )
+
+    def test_create_conversation_strips_title_whitespace(self):
+        response = self.client.post(
+            "/api/conversations/",
+            {
+                "title": " My Conversation ",
+            },
+            format="json",
+        )    
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_201_CREATED,
+        )
+
+        self.assertEqual(
+            response.data["title"],
+            "My Conversation",
+        )
+
+        self.assertTrue(
+            Conversation.objects.filter(
+                user=self.user,
+                title="My Conversation",
+            ).exists()
+        )
+
+    def test_update_conversation_rejects_empty_title(self):
+        conversation = Conversation.objects.create(
+            user=self.user,
+            title="Original Title",
+        )    
+
+        response = self.client.patch(
+            f"/api/conversations/{conversation.id}/",
+            {
+                "title": "",
+            },
+            format="json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_400_BAD_REQUEST,
+        )
+
+        conversation.refresh_from_db()
+
+        self.assertEqual(
+            conversation.title,
+            "Original Title",
+        )
+
+    def test_update_conversation_rejects_whitespace_title(self):
+        conversation = Conversation.objects.create(
+            user=self.user,
+            title="Original Title",
+        )    
+
+        response = self.client.patch(
+            f"/api/conversations/{conversation.id}/",
+            {
+                "title": "  ",
+            },
+            format="json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_400_BAD_REQUEST,
+        )
+
+        conversation.refresh_from_db()
+
+        self.assertEqual(
+            conversation.title,
+            "Original Title",
+        )
+
+    def test_update_conversation_strips_title_whitespace(self):
+        conversation = Conversation.objects.create(
+            user=self.user,
+            title="Original Title",
+        )    
+
+        response = self.client.patch(
+            f"/api/conversations/{conversation.id}/",
+            {
+                "title": " Updated Title ",
+            },
+            format="json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_200_OK,
+        )
+
+        conversation.refresh_from_db()
+
+        self.assertEqual(
+            conversation.title,
+            "Updated Title",
+        )
+
+        self.assertEqual(
+            response.data["title"],
+            "Updated Title",
+        )
+
     def test_delete_own_conversation(self):
         conversation = Conversation.objects.create(
             user=self.user,
@@ -638,6 +782,8 @@ class ConversationAPItestCase(APITestCase):
             response.data["results"][1]["id"],
             first.id,
         )
+
+
 
 class MessageListCreateAPITestCase(APITestCase):
     def setUp(self):
