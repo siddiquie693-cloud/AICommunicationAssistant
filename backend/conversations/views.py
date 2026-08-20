@@ -3,6 +3,10 @@ from rest_framework.permissions import IsAuthenticated
 from django.shortcuts import get_object_or_404
 
 from .models import Conversation, Message
+from django.utils import timezone
+from rest_framework.response import Response
+from rest_framework import status
+
 from .pagination import (
     ConversationPagination,
     MessagePagination,
@@ -19,7 +23,8 @@ class ConversationListCreateAPIView(generics.ListCreateAPIView):
 
     def get_queryset(self):
         queryset = Conversation.objects.filter(
-            user=self.request.user
+            user=self.request.user,
+            deleted_at__isnull=True,
         )
 
         archived = self.request.query_params.get(
@@ -73,7 +78,51 @@ class ConversationDetailAPIView(generics.RetrieveUpdateDestroyAPIView):
 
     def get_queryset(self):
         return Conversation.objects.filter(
-            user=self.request.user
+            user=self.request.user,
+            deleted_at__isnull=True,
+        )
+
+    def destroy(self, request, *args, **kwargs):
+        conversation = self.get_object()
+
+        conversation.deleted_at = timezone.now()
+        conversation.save(
+            update_fields=["deleted_at"]
+        )
+
+        return Response(
+            status=status.HTTP_204_NO_CONTENT
+        )
+
+class ConversationRestoreAPIView(generics.GenericAPIView):
+    serializer_class = ConversationSerializer
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, *args, **kwargs):
+        conversation = get_object_or_404(
+            Conversation,
+            id=kwargs["pk"],
+            user=request.user,
+        )
+
+        if conversation.deleted_at is None:
+            return Response(
+                {
+                    "detail": "Conversation is already active."
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        conversation.deleted_at = None
+        conversation.save(
+            update_fields=["deleted_at"]
+        )
+
+        serializer = self.get_serializer(conversation)
+
+        return Response(
+            serializer.data,
+            status=status.HTTP_200_OK,
         )
 
 class MessageListCreateAPIView(generics.ListCreateAPIView):

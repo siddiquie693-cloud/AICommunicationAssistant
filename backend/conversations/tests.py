@@ -4,6 +4,7 @@ from rest_framework import status
 from rest_framework.test import APITestCase
 
 from .models import Conversation, Message
+from django.utils import timezone
 
 User = get_user_model()
 
@@ -33,11 +34,11 @@ class ConversationModelTestCase(TestCase):
 
         self.assertFalse(
             conversation.is_archived,
-        ) 
+        )
 
         self.assertIsNotNone(
             conversation.created_at,
-        ) 
+        )
 
     def test_conversation_string_representation(self):
         conversation = Conversation.objects.create(
@@ -145,7 +146,7 @@ class ConversationAPItestCase(APITestCase):
             Conversation.objects.create(
                 user=self.user,
                 title=f"Conversation {index}",
-            )    
+            )
 
         response = self.client.get(
             "/api/conversations/"
@@ -175,10 +176,10 @@ class ConversationAPItestCase(APITestCase):
             Conversation.objects.create(
                 user=self.user,
                 title=f"Conversation {index}",
-            )        
+            )
         response = self.client.get(
             "/api/conversations/?page_size=5"
-        )    
+        )
 
         self.assertEqual(
             response.status_code,
@@ -200,10 +201,10 @@ class ConversationAPItestCase(APITestCase):
             Conversation.objects.create(
                 user=self.user,
                 title=f"Conversation {index}",
-            )    
+            )
         response = self.client.get(
             "/api/conversations/?page_size=100"
-        )    
+        )
 
         self.assertEqual(
             response.status_code,
@@ -228,7 +229,7 @@ class ConversationAPItestCase(APITestCase):
 
         response = self.client.get(
             f"/api/conversations/{conversation.id}/"
-        ) 
+        )
 
         self.assertEqual(
             response.status_code,
@@ -288,7 +289,7 @@ class ConversationAPItestCase(APITestCase):
                 "title": "",
             },
             format="json",
-        )    
+        )
 
         self.assertEqual(
             response.status_code,
@@ -309,7 +310,7 @@ class ConversationAPItestCase(APITestCase):
                 "title": "  ",
             },
             format="json",
-        )    
+        )
 
         self.assertEqual(
             response.status_code,
@@ -323,7 +324,7 @@ class ConversationAPItestCase(APITestCase):
                 "title": " My Conversation ",
             },
             format="json",
-        )    
+        )
 
         self.assertEqual(
             response.status_code,
@@ -346,7 +347,7 @@ class ConversationAPItestCase(APITestCase):
         conversation = Conversation.objects.create(
             user=self.user,
             title="Original Title",
-        )    
+        )
 
         response = self.client.patch(
             f"/api/conversations/{conversation.id}/",
@@ -372,7 +373,7 @@ class ConversationAPItestCase(APITestCase):
         conversation = Conversation.objects.create(
             user=self.user,
             title="Original Title",
-        )    
+        )
 
         response = self.client.patch(
             f"/api/conversations/{conversation.id}/",
@@ -398,7 +399,7 @@ class ConversationAPItestCase(APITestCase):
         conversation = Conversation.objects.create(
             user=self.user,
             title="Original Title",
-        )    
+        )
 
         response = self.client.patch(
             f"/api/conversations/{conversation.id}/",
@@ -425,7 +426,7 @@ class ConversationAPItestCase(APITestCase):
             "Updated Title",
         )
 
-    def test_delete_own_conversation(self):
+    def test_delete_own_conversation_soft_deletes(self):
         conversation = Conversation.objects.create(
             user=self.user,
             title="Delete Me",
@@ -440,10 +441,147 @@ class ConversationAPItestCase(APITestCase):
             status.HTTP_204_NO_CONTENT,
         )
 
-        self.assertFalse(
-            Conversation.objects.filter(
-                id=conversation.id
-            ).exists()
+        conversation.refresh_from_db()
+
+        self.assertIsNotNone(
+            conversation.deleted_at
+        )
+
+    def test_deleted_conversation_is_excluded_from_list(self):
+        Conversation.objects.create(
+            user=self.user,
+            title="Active Conversation",
+        )
+
+        deleted_conversation = Conversation.objects.create(
+            user=self.user,
+            title="Deleted Conversation",
+        )
+
+        deleted_conversation.deleted_at = timezone.now()
+        deleted_conversation.save()
+
+        response = self.client.get(
+            "/api/conversations/"
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_200_OK,
+        )
+
+        self.assertEqual(
+            response.data["count"],
+            1,
+        )
+
+        self.assertEqual(
+            response.data["results"][0]["title"],
+            "Active Conversation",
+        )
+
+    def test_restore_deleted_conversation(self):
+        conversation = Conversation.objects.create(
+            user=self.user,
+            title="Restore Me",
+            deleted_at=timezone.now(),
+        )
+
+        response = self.client.post(
+            f"/api/conversations/{conversation.id}/restore/"
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_200_OK,
+        )
+
+        conversation.refresh_from_db()
+
+        self.assertIsNone(
+            conversation.deleted_at,
+        )
+
+        self.assertEqual(
+            response.data["id"],
+            conversation.id,
+        )
+
+        self.assertEqual(
+            response.data["title"],
+            "Restore Me",
+        )
+
+    def test_restored_conversation_appears_in_list(self):
+        conversation = Conversation.objects.create(
+            user=self.user,
+            title="Restore and List",
+            deleted_at=timezone.now(),
+        )
+
+        response = self.client.post(
+            f"/api/conversations/{conversation.id}/restore/"
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_200_OK,
+        )
+
+        list_response = self.client.get(
+            "/api/conversations/"
+        )
+
+        self.assertEqual(
+            list_response.status_code,
+            status.HTTP_200_OK,
+        )
+
+        self.assertEqual(
+            list_response.data["count"],
+            1,
+        )
+
+        self.assertEqual(
+            list_response.data["results"][0]["id"],
+            conversation.id,
+        )
+
+    def test_restore_active_conversation_is_rejected(self):
+        conversation = Conversation.objects.create(
+            user=self.user,
+            title="Already Active",
+        )
+
+        response = self.client.post(
+            f"/api/conversations/{conversation.id}/restore/"
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_400_BAD_REQUEST,
+        )
+
+    def test_cannot_restore_other_users_deleted_conversation(self):
+        conversation = Conversation.objects.create(
+            user=self.other_user,
+            title="Private Deleted Conversation",
+            deleted_at=timezone.now(),
+        )
+
+        response = self.client.post(
+            f"/api/conversations/{conversation.id}/restore/"
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_404_NOT_FOUND,
+        )
+
+        conversation.refresh_from_db()
+
+        self.assertIsNotNone(
+            conversation.deleted_at,
         )
 
     def test_unauthenticated_user_cannot_access_conversations(self):
@@ -456,13 +594,13 @@ class ConversationAPItestCase(APITestCase):
         self.assertEqual(
             response.status_code,
             status.HTTP_401_UNAUTHORIZED,
-        ) 
+        )
 
     def test_archive_own_conversation(self):
         conversation = Conversation.objects.create(
             user=self.user,
             title="Archive Me",
-        )     
+        )
 
         response = self.client.patch(
             f"/api/conversations/{conversation.id}/",
@@ -492,7 +630,7 @@ class ConversationAPItestCase(APITestCase):
             user=self.user,
             title="Unarchive Me",
             is_archived=True,
-        )    
+        )
 
         response = self.client.patch(
             f"/api/conversations/{conversation.id}/",
@@ -522,7 +660,7 @@ class ConversationAPItestCase(APITestCase):
             user=self.user,
             title="Active Conversation",
             is_archived=False,
-        )    
+        )
 
         Conversation.objects.create(
             user=self.user,
@@ -554,7 +692,7 @@ class ConversationAPItestCase(APITestCase):
             user=self.user,
             title="Active Conversation",
             is_archived=False,
-        )    
+        )
 
         Conversation.objects.create(
             user=self.user,
@@ -586,7 +724,7 @@ class ConversationAPItestCase(APITestCase):
             user=self.user,
             title="Active Conversation",
             is_archived=False,
-        )    
+        )
 
         Conversation.objects.create(
             user=self.user,
@@ -617,7 +755,7 @@ class ConversationAPItestCase(APITestCase):
         Conversation.objects.create(
             user=self.user,
             title="Python Backend Project",
-        )    
+        )
 
         Conversation.objects.create(
             user=self.user,
@@ -647,7 +785,7 @@ class ConversationAPItestCase(APITestCase):
         Conversation.objects.create(
             user=self.user,
             title="Python Backend Project",
-        )    
+        )
 
         response = self.client.get(
             "/api/conversations/?search=python"
@@ -672,7 +810,7 @@ class ConversationAPItestCase(APITestCase):
         Conversation.objects.create(
             user=self.user,
             title="Python Backend Project",
-        )    
+        )
 
         response = self.client.get(
             "/api/conversations/?search=Java"
@@ -697,7 +835,7 @@ class ConversationAPItestCase(APITestCase):
         first = Conversation.objects.create(
             user=self.user,
             title="First Conversation",
-        )    
+        )
 
         second = Conversation.objects.create(
             user=self.user,
@@ -727,7 +865,7 @@ class ConversationAPItestCase(APITestCase):
         first = Conversation.objects.create(
             user=self.user,
             title="First Conversation",
-        )    
+        )
 
         second = Conversation.objects.create(
             user=self.user,
@@ -757,7 +895,7 @@ class ConversationAPItestCase(APITestCase):
         first = Conversation.objects.create(
             user=self.user,
             title="First Conversation",
-        )    
+        )
 
         second = Conversation.objects.create(
             user=self.user,
@@ -824,7 +962,7 @@ class MessageListCreateAPITestCase(APITestCase):
             conversation=self.conversation,
             sender_type=Message.SENDER_ASSISTANT,
             content="Hi! How can I help?",
-        ) 
+        )
 
         response = self.client.get(
             f"/api/conversations/{self.conversation.id}/messages/"
@@ -864,7 +1002,7 @@ class MessageListCreateAPITestCase(APITestCase):
             )
         response = self.client.get(
             f"/api/conversations/{self.conversation.id}/messages/"
-        )         
+        )
 
         self.assertEqual(
             response.status_code,
@@ -891,10 +1029,10 @@ class MessageListCreateAPITestCase(APITestCase):
                 conversation=self.conversation,
                 sender_type=Message.SENDER_USER,
                 content=f"Message {index}",
-            )    
+            )
         response = self.client.get(
             f"/api/conversations/{self.conversation.id}/messages/?page_size=5"
-        )    
+        )
 
         self.assertEqual(
             response.status_code,
@@ -917,10 +1055,10 @@ class MessageListCreateAPITestCase(APITestCase):
                 conversation=self.conversation,
                 sender_type=Message.SENDER_USER,
                 content=f"Message {index}",
-            )    
+            )
         response = self.client.get(
             f"/api/conversations/{self.conversation.id}/messages/?page_size=100"
-        )    
+        )
 
         self.assertEqual(
             response.status_code,
@@ -942,7 +1080,7 @@ class MessageListCreateAPITestCase(APITestCase):
             conversation=self.conversation,
             sender_type=Message.SENDER_USER,
             content="Hello, how are you?",
-        )    
+        )
 
         Message.objects.create(
             conversation=self.conversation,
@@ -974,7 +1112,7 @@ class MessageListCreateAPITestCase(APITestCase):
             conversation=self.conversation,
             sender_type=Message.SENDER_USER,
             content="Hello Python Developer",
-        )    
+        )
 
         response = self.client.get(
             f"/api/conversations/{self.conversation.id}/messages/?search=python"
@@ -1000,7 +1138,7 @@ class MessageListCreateAPITestCase(APITestCase):
             conversation=self.conversation,
             sender_type=Message.SENDER_USER,
             content="Hello, how are you?",
-        )    
+        )
 
         response = self.client.get(
             f"/api/conversations/{self.conversation.id}/messages/?search=Java"
@@ -1036,12 +1174,12 @@ class MessageListCreateAPITestCase(APITestCase):
         self.assertEqual(
             response.status_code,
             status.HTTP_201_CREATED,
-        )  
+        )
 
         self.assertEqual(
             response.data["sender_type"],
             Message.SENDER_USER,
-        )   
+        )
 
         self.assertEqual(
             response.data["content"],
@@ -1058,7 +1196,7 @@ class MessageListCreateAPITestCase(APITestCase):
     def test_cannot_access_other_users_conversation(self):
         response = self.client.get(
             f"/api/conversations/{self.other_conversation.id}/messages/"
-        )    
+        )
 
         self.assertEqual(
             response.status_code,
@@ -1069,18 +1207,18 @@ class MessageListCreateAPITestCase(APITestCase):
         data = {
             "sender_type": Message.SENDER_USER,
             "content": "This should not be allowed.",
-        } 
+        }
 
         response = self.client.post(
             f"/api/conversations/{self.other_conversation.id}/messages/",
             data,
             format="json",
-        ) 
+        )
 
         self.assertEqual(
             response.status_code,
             status.HTTP_404_NOT_FOUND,
-        )  
+        )
 
         self.assertFalse(
             Message.objects.filter(
@@ -1093,7 +1231,7 @@ class MessageListCreateAPITestCase(APITestCase):
         data = {
             "sender_type": Message.SENDER_USER,
             "content": "",
-        }    
+        }
 
         response = self.client.post(
             f"/api/conversations/{self.conversation.id}/messages/",
@@ -1110,7 +1248,7 @@ class MessageListCreateAPITestCase(APITestCase):
         data = {
             "sender_type": Message.SENDER_USER,
             "content": " ",
-        }    
+        }
 
         response = self.client.post(
             f"/api/conversations/{self.conversation.id}/messages/",
@@ -1127,7 +1265,7 @@ class MessageListCreateAPITestCase(APITestCase):
         data = {
             "sender_type": Message.SENDER_USER,
             "content": " Hello there ",
-        }    
+        }
         response = self.client.post(
             f"/api/conversations/{self.conversation.id}/messages/",
             data,
@@ -1147,7 +1285,7 @@ class MessageListCreateAPITestCase(APITestCase):
         data = {
             "sender_type": "invalid",
             "content": "This should be rejected.",
-        }    
+        }
 
         response = self.client.post(
             f"/api/conversations/{self.conversation.id}/messages/",
@@ -1209,7 +1347,7 @@ class MessageDetailAPITestCase(APITestCase):
     def test_retrieve_message(self):
         response = self.client.get(
             f"/api/conversations/{self.conversation.id}/messages/{self.message.id}/"
-        )    
+        )
 
         self.assertEqual(
             response.status_code,
@@ -1229,7 +1367,7 @@ class MessageDetailAPITestCase(APITestCase):
     def test_update_message(self):
         data = {
             "content": "Updated message",
-        }    
+        }
         response = self.client.patch(
             f"/api/conversations/{self.conversation.id}/messages/{self.message.id}/",
             data,
@@ -1256,7 +1394,7 @@ class MessageDetailAPITestCase(APITestCase):
     def test_delete_message(self):
         response = self.client.delete(
             f"/api/conversations/{self.conversation.id}/messages/{self.message.id}/"
-        )    
+        )
 
         self.assertEqual(
             response.status_code,
@@ -1272,7 +1410,7 @@ class MessageDetailAPITestCase(APITestCase):
     def test_cannot_retrieve_other_users_message(self):
         response = self.client.get(
             f"/api/conversations/{self.other_conversation.id}/messages/{self.other_message.id}/"
-        )    
+        )
 
         self.assertEqual(
             response.status_code,
@@ -1282,7 +1420,7 @@ class MessageDetailAPITestCase(APITestCase):
     def test_cannot_update_other_users_message(self):
         data = {
             "content": "Unauthorized update",
-        }    
+        }
 
         response = self.client.patch(
             f"/api/conversations/{self.other_conversation.id}/messages/{self.other_message.id}/",
@@ -1305,7 +1443,7 @@ class MessageDetailAPITestCase(APITestCase):
     def test_cannot_delete_other_users_message(self):
         response = self.client.delete(
             f"/api/conversations/{self.other_conversation.id}/messages/{self.other_message.id}/"
-        )    
+        )
 
         self.assertEqual(
             response.status_code,
