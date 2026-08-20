@@ -1625,6 +1625,140 @@ class MessageListCreateAPITestCase(APITestCase):
             "Hello there",
         )
 
+    def test_message_list_defaults_to_oldest_first(self):
+        first = Message.objects.create(
+            conversation=self.conversation,
+            sender_type=Message.SENDER_USER,
+            content="First Message",
+        )
+
+        second = Message.objects.create(
+            conversation=self.conversation,
+            sender_type=Message.SENDER_USER,
+            content="Second Message",
+        )
+
+        response = self.client.get(
+            f"/api/conversations/{self.conversation.id}/messages/"
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_200_OK,
+        )
+
+        self.assertEqual(
+            response.data["results"][0]["id"],
+            first.id,
+        )
+
+        self.assertEqual(
+            response.data["results"][1]["id"],
+            second.id,
+        )
+
+    def test_message_list_can_order_newest_first(self):
+        first = Message.objects.create(
+            conversation=self.conversation,
+            sender_type=Message.SENDER_USER,
+            content="First Message",
+        )
+
+        second = Message.objects.create(
+            conversation=self.conversation,
+            sender_type=Message.SENDER_USER,
+            content="Second Message",
+        )
+
+        first.created_at = timezone.now() - timezone.timedelta(minutes=1)
+        first.save(update_fields=["created_at"])
+
+        second.created_at = timezone.now()
+        second.save(update_fields=["created_at"])
+
+        response = self.client.get(
+            f"/api/conversations/{self.conversation.id}/messages/?ordering=-created_at"
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_200_OK,
+        )
+
+        self.assertEqual(
+            response.data["results"][0]["id"],
+            second.id,
+        )
+
+        self.assertEqual(
+            response.data["results"][1]["id"],
+            first.id,
+        )
+
+    def test_message_list_can_order_oldest_first(self):
+        first = Message.objects.create(
+            conversation=self.conversation,
+            sender_type=Message.SENDER_USER,
+            content="First Message",
+        )
+
+        second = Message.objects.create(
+            conversation=self.conversation,
+            sender_type=Message.SENDER_USER,
+            content="Second Message",
+        )
+
+        response = self.client.get(
+            f"/api/conversations/{self.conversation.id}/messages/?ordering=created_at"
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_200_OK,
+        )
+
+        self.assertEqual(
+            response.data["results"][0]["id"],
+            first.id,
+        )
+
+        self.assertEqual(
+            response.data["results"][1]["id"],
+            second.id,
+        )
+
+    def test_invalid_message_ordering_defaults_to_oldest(self):
+        first = Message.objects.create(
+            conversation=self.conversation,
+            sender_type=Message.SENDER_USER,
+            content="Second Message",
+        )
+
+        second = Message.objects.create(
+            conversation=self.conversation,
+            sender_type=Message.SENDER_USER,
+            content="Second Message",
+        )
+
+        response = self.client.get(
+            f"/api/conversations/{self.conversation.id}/messages/?ordering=invalid"
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_200_OK,
+        )
+
+        self.assertEqual(
+            response.data["results"][0]["id"],
+            first.id,
+        )
+
+        self.assertEqual(
+            response.data["results"][1]["id"],
+            second.id,
+        )
+
     def test_create_message_rejects_invalid_sender_type(self):
         data = {
             "sender_type": "invalid",

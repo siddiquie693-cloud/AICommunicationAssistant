@@ -175,7 +175,23 @@ class MessageListCreateAPIView(generics.ListCreateAPIView):
             queryset = queryset.filter(
                 content__icontains=search
             )
-        return queryset.order_by("created_at")
+        ordering = self.request.query_params.get(
+            "ordering",
+            "created_at",
+        )
+
+        allowed_orderings = {
+            "created_at",
+            "-created_at",
+        }
+
+        if ordering not in allowed_orderings:
+            ordering = "created_at"
+
+        return queryset.order_by(
+            ordering,
+            "id" if ordering == "created_at" else "-id",
+        )
 
     def perform_create(self, serializer):
         conversation = self.get_conversation()
