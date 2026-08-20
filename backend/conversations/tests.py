@@ -1082,8 +1082,6 @@ class ConversationAPItestCase(APITestCase):
             first.id,
         )
 
-
-
 class MessageListCreateAPITestCase(APITestCase):
     def setUp(self):
         self.user = User.objects.create_user(
@@ -1351,6 +1349,191 @@ class MessageListCreateAPITestCase(APITestCase):
             Message.objects.filter(
                 conversation=self.conversation,
                 content="Hello, I need help.",
+            ).exists()
+        )
+
+    def test_create_message_rejects_empty_content(self):
+        response = self.client.post(
+            f"/api/conversations/{self.conversation.id}/messages/",
+            {
+                "sender_type": Message.SENDER_USER,
+                "content": "",
+            },
+            format="json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_400_BAD_REQUEST,
+        )
+
+    def test_create_message_rejects_whitespace_content(self):
+        response = self.client.post(
+            f"/api/conversations/{self.conversation.id}/messages/",
+            {
+                "sender_type": Message.SENDER_USER,
+                "content": "  ",
+            },
+            format="json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_400_BAD_REQUEST,
+        )
+
+    def test_create_message_strips_content_whitespace(self):
+        response = self.client.post(
+            f"/api/conversations/{self.conversation.id}/messages/",
+            {
+                "sender_type": Message.SENDER_USER,
+                "content": " Hello Python ",
+            },
+            format="json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_201_CREATED,
+        )
+
+        self.assertEqual(
+            response.data["content"],
+            "Hello Python",
+        )
+
+        self.assertTrue(
+            Message.objects.filter(
+                conversation=self.conversation,
+                content="Hello Python",
+            ).exists()
+        )
+
+    def test_update_message_strips_content_whitespace(self):
+        message = Message.objects.create(
+            conversation=self.conversation,
+            sender_type=Message.SENDER_USER,
+            content="Original Message",
+        )
+
+        response = self.client.patch(
+            f"/api/conversations/{self.conversation.id}/messages/{message.id}/",
+            {
+                "content": " Updated Message ",
+            },
+            format="json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_200_OK,
+        )
+
+        message.refresh_from_db()
+
+        self.assertEqual(
+            message.content,
+            "Updated Message",
+        )
+
+        self.assertEqual(
+            response.data["content"],
+            "Updated Message",
+        )
+
+    def test_update_message_rejects_empty_content(self):
+        message = Message.objects.create(
+            conversation=self.conversation,
+            sender_type=Message.SENDER_USER,
+            content="Original Message",
+        )
+
+        response = self.client.patch(
+            f"/api/conversations/{self.conversation.id}/messages/{message.id}/",
+            {
+                "content": "",
+            },
+            format="json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_400_BAD_REQUEST,
+        )
+
+        message.refresh_from_db()
+
+        self.assertEqual(
+            message.content,
+            "Original Message",
+        )
+
+    def test_create_message_rejects_invalid_sender_type(self):
+        response = self.client.post(
+            f"/api/conversations/{self.conversation.id}/messages/",
+            {
+                "sender_type": "invalid",
+                "content": "Hello",
+            },
+            format="json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_400_BAD_REQUEST,
+        )
+
+    def test_message_are_inaccessible_for_deleted_conversation(self):
+        message = Message.objects.create(
+            conversation=self.conversation,
+            sender_type=Message.SENDER_USER,
+            content="Hidden message",
+        )
+
+        self.conversation.deleted_at = timezone.now()
+        self.conversation.save(
+            update_fields=["deleted_at"]
+        )
+
+        response = self.client.get(
+            f"/api/conversations/{self.conversation.id}/messages/"
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_404_NOT_FOUND,
+        )
+
+        self.assertTrue(
+            Message.objects.filter(
+                id=message.id
+            ).exists()
+        )
+
+    def test_individual_message_is_inaccessible_for_deleted_conversation(self):
+        message = Message.objects.create(
+            conversation=self.conversation,
+            sender_type=Message.SENDER_USER,
+            content="Hidden individual message",
+        )
+
+        self.conversation.deleted_at = timezone.now()
+        self.conversation.save(
+            update_fields=["deleted_at"]
+        )
+
+        response = self.client.get(
+            f"/api/conversations/{self.conversation.id}/messages/{message.id}/"
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_404_NOT_FOUND,
+        )
+
+        self.assertTrue(
+            Message.objects.filter(
+                id=message.id
             ).exists()
         )
 

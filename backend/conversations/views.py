@@ -159,6 +159,7 @@ class MessageListCreateAPIView(generics.ListCreateAPIView):
             Conversation,
             id=self.kwargs["conversation_id"],
             user=self.request.user,
+            deleted_at__isnull=True,
         )
 
     def get_queryset(self):
@@ -191,4 +192,5 @@ class MessageDetailAPIView(generics.RetrieveUpdateDestroyAPIView):
         return Message.objects.filter(
             conversation__user=self.request.user,
             conversation_id=self.kwargs["conversation_id"],
+            conversation__deleted_at__isnull=True,
         )
