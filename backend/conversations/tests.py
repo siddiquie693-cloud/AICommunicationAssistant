@@ -1759,6 +1759,168 @@ class MessageListCreateAPITestCase(APITestCase):
             second.id,
         )
 
+    def test_new_message_is_unread_by_default(self):
+        message = Message.objects.create(
+            conversation=self.conversation,
+            sender_type=Message.SENDER_USER,
+            content="Unread message",
+        )
+
+        self.assertFalse(
+            message.is_read
+        )
+
+    def test_message_response_includes_read_status(self):
+        message = Message.objects.create(
+            conversation=self.conversation,
+            sender_type=Message.SENDER_USER,
+            content="Read status test",
+        )
+
+        response = self.client.get(
+            f"/api/conversations/{self.conversation.id}/messages/"
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_200_OK,
+        )
+
+        self.assertFalse(
+            response.data["results"][0]["is_read"]
+        )
+
+    def test_message_update_cannot_change_read_status(self):
+        message = Message.objects.create(
+            conversation=self.conversation,
+            sender_type=Message.SENDER_USER,
+            content="Original message",
+        )
+
+        response = self.client.patch(
+            f"/api/conversations/{self.conversation.id}/messages/{message.id}/",
+            {
+                "is_read": True,
+            },
+            format="json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_200_OK,
+        )
+
+        message.refresh_from_db()
+
+        self.assertFalse(
+            message.is_read
+        )
+
+    def test_mark_message_as_read(self):
+        message = Message.objects.create(
+            conversation=self.conversation,
+            sender_type=Message.SENDER_USER,
+            content="Mark me as read",
+        )
+
+        response = self.client.post(
+            f"/api/conversations/{self.conversation.id}/messages/{message.id}/read/"
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_200_OK,
+        )
+
+        message.refresh_from_db()
+
+        self.assertTrue(
+            message.is_read
+        )
+
+        self.assertTrue(
+            response.data["is_read"]
+        )
+
+    def test_mark_already_read_message_as_read_is_safe(self):
+        message = Message.objects.create(
+            conversation=self.conversation,
+            sender_type=Message.SENDER_USER,
+            content="Already read",
+            is_read=True,
+        )
+
+        response = self.client.post(
+            f"/api/conversations/{self.conversation.id}/messages/{message.id}/read/"
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_200_OK,
+        )
+
+        message.refresh_from_db()
+
+        self.assertTrue(
+            message.is_read
+        )
+
+    def test_cannot_mark_other_users_message_as_read(self):
+        other_conversation = Conversation.objects.create(
+            user=self.other_user,
+            title="Other User Conversation",
+        )
+
+        message = Message.objects.create(
+            conversation=other_conversation,
+            sender_type=Message.SENDER_USER,
+            content="Private message",
+        )
+
+        response = self.client.post(
+            f"/api/conversations/{other_conversation.id}/messages/{message.id}/read/"
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_404_NOT_FOUND,
+        )
+
+        message.refresh_from_db()
+
+        self.assertFalse(
+            message.is_read
+        )
+
+    def test_cannot_mark_deleted_conversation_message_as_read(self):
+        conversation = self.conversation
+
+        conversation.deleted_at = timezone.now()
+        conversation.save(
+            update_fields=["deleted_at"]
+        )
+
+        message = Message.objects.create(
+            conversation=conversation,
+            sender_type=Message.SENDER_USER,
+            content="Deleted conversation message",
+        )
+
+        response = self.client.post(
+            f"/api/conversations/{conversation.id}/messages/{message.id}/read/"
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_404_NOT_FOUND,
+        )
+
+        message.refresh_from_db()
+
+        self.assertFalse(
+            message.is_read
+        )
+
     def test_create_message_rejects_invalid_sender_type(self):
         data = {
             "sender_type": "invalid",

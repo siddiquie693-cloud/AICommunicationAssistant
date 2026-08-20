@@ -30,6 +30,7 @@ class MessageSerializer(serializers.ModelSerializer):
             "id",
             "sender_type",
             "content",
+            "is_read",
             "created_at",
             "updated_at",
         ]
@@ -37,6 +38,7 @@ class MessageSerializer(serializers.ModelSerializer):
             "id",
             "created_at",
             "updated_at",
+            "is_read",
         ]
 
     def validate_content(self, value):

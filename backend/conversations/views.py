@@ -210,3 +210,33 @@ class MessageDetailAPIView(generics.RetrieveUpdateDestroyAPIView):
             conversation_id=self.kwargs["conversation_id"],
             conversation__deleted_at__isnull=True,
         )
+
+class MessageReadAPIView(generics.GenericAPIView):
+    serializer_class = MessageSerializer
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, *args, **kwargs):
+        conversation = get_object_or_404(
+            Conversation,
+            id=kwargs["conversation_id"],
+            user=request.user,
+            deleted_at__isnull=True,
+        )
+
+        message = get_object_or_404(
+            Message,
+            id=kwargs["pk"],
+            conversation=conversation,
+        )
+
+        message.is_read = True
+        message.save(
+            update_fields=["is_read"]
+        )
+
+        serializer = self.get_serializer(message)
+
+        return Response(
+            serializer.data,
+            status=status.HTTP_200_OK,
+        )
