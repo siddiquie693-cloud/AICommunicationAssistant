@@ -4,6 +4,7 @@ from .views import (
     ConversationDetailAPIView,
     ConversationListCreateAPIView,
     ConversationRestoreAPIView,
+    ConversationTrashListAPIView,
     MessageListCreateAPIView,
     MessageDetailAPIView,
 )
@@ -11,6 +12,11 @@ from .views import (
 urlpatterns = [
     path("", 
         ConversationListCreateAPIView.as_view(),
+        name="conversation-list-create",
+    ),
+    path(
+        "trash/",
+        ConversationTrashListAPIView.as_view(),
         name="conversation-list-create",
     ),
     path("<int:pk>/",

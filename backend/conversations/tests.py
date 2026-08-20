@@ -584,6 +584,167 @@ class ConversationAPItestCase(APITestCase):
             conversation.deleted_at,
         )
 
+    def test_list_deleted_conversation_in_trash(self):
+        Conversation.objects.create(
+            user=self.user,
+            title="Active Conversation",
+        )
+
+        deleted_conversation = Conversation.objects.create(
+            user=self.user,
+            title="Deleted Conversation",
+            deleted_at=timezone.now(),
+        )
+
+        response = self.client.get(
+            "/api/conversations/trash/"
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_200_OK,
+        )
+
+        self.assertEqual(
+            response.data["count"],
+            1,
+        )
+
+        self.assertEqual(
+            response.data["results"][0]["id"],
+            deleted_conversation.id,
+        )
+
+    def test_trash_excludes_active_conversations(self):
+        active_conversation = Conversation.objects.create(
+            user=self.user,
+            title="Active Conversation",
+        )
+
+        response = self.client.get(
+            "/api/conversations/trash/"
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_200_OK,
+        )
+
+        self.assertEqual(
+            response.data["count"],
+            0,
+        )
+
+        self.assertNotIn(
+            active_conversation.id,
+            [
+                item["id"]
+                for item in response.data["results"]
+            ],
+        )
+
+    def test_trash_excludes_other_users_deleted_conversations(self):
+        Conversation.objects.create(
+            user=self.other_user,
+            title="Other User Deleted",
+            deleted_at=timezone.now(),
+        )
+
+        response = self.client.get(
+            "/api/conversations/trash/"
+        )
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_200_OK,
+        )
+
+        self.assertEqual(
+            response.data["count"],
+            0,
+        )
+
+    def test_search_deleted_conversations_in_trash(self):
+        Conversation.objects.create(
+            user=self.user,
+            title="Deleted Python Project",
+            deleted_at=timezone.now(),
+        )
+
+        Conversation.objects.create(
+            user=self.user,
+            title="Deleted Java Project",
+            deleted_at=timezone.now(),
+        )
+
+        response = self.client.get(
+            "/api/conversations/trash/?search=Python"
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_200_OK,
+        )
+
+        self.assertEqual(
+            response.data["count"],
+            1,
+        )
+
+        self.assertEqual(
+            response.data["results"][0]["title"],
+            "Deleted Python Project",
+        )
+
+    def test_empty_trash_returns_empty_results(self):
+        response = self.client.get(
+            "/api/conversations/trash/"
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_200_OK,
+        )
+
+        self.assertEqual(
+            response.data["count"],
+            0,
+        )
+
+        self.assertEqual(
+            len(response.data["results"]),
+            0,
+        )
+
+    def test_restored_conversation_is_removed_from_trash(self):
+        conversation = Conversation.objects.create(
+            user=self.user,
+            title="Restore From Trash",
+            deleted_at=timezone.now(),
+        )
+
+        response = self.client.post(
+            f"/api/conversations/{conversation.id}/restore/"
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_200_OK,
+        )
+
+        trash_response = self.client.get(
+            "/api/conversations/trash/"
+        )
+
+        self.assertEqual(
+            trash_response.status_code,
+            status.HTTP_200_OK,
+        )
+
+        self.assertEqual(
+            trash_response.data["count"],
+            0,
+        )
+
     def test_unauthenticated_user_cannot_access_conversations(self):
         self.client.force_authenticate(user=None)
 

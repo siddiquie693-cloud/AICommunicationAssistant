@@ -38,11 +38,11 @@ class ConversationListCreateAPIView(generics.ListCreateAPIView):
         else:
             queryset = queryset.filter(
                 is_archived=False
-            ) 
+            )
 
         search = self.request.query_params.get(
             "search"
-        )       
+        )
 
         if search:
             queryset = queryset.filter(
@@ -57,15 +57,15 @@ class ConversationListCreateAPIView(generics.ListCreateAPIView):
         allowed_orderings = {
             "created_at",
             "-created_at",
-        } 
+        }
 
         if ordering not in allowed_orderings:
-            ordering = "-created_at"   
+            ordering = "-created_at"
 
         return queryset.order_by(
             ordering,
             "-id" if ordering == "-created_at" else "id",
-        )    
+        )
 
     def perform_create(self, serializer):
         serializer.save(
@@ -125,6 +125,30 @@ class ConversationRestoreAPIView(generics.GenericAPIView):
             status=status.HTTP_200_OK,
         )
 
+class ConversationTrashListAPIView(generics.ListAPIView):
+    serializer_class = ConversationSerializer
+    permission_classes = [IsAuthenticated]
+    pagination_class = ConversationPagination
+
+    def get_queryset(self):
+        queryset = Conversation.objects.filter(
+            user=self.request.user,
+            deleted_at__isnull=False,
+        )
+
+        search = self.request.query_params.get(
+            "search"
+        )
+
+        if search:
+            queryset = queryset.filter(
+                title__icontains=search
+            )
+        return queryset.order_by(
+            "-deleted_at",
+            "-id",
+        )
+
 class MessageListCreateAPIView(generics.ListCreateAPIView):
     serializer_class = MessageSerializer
     permission_classes = [IsAuthenticated]
@@ -150,14 +174,14 @@ class MessageListCreateAPIView(generics.ListCreateAPIView):
             queryset = queryset.filter(
                 content__icontains=search
             )
-        return queryset.order_by("created_at")    
+        return queryset.order_by("created_at")
 
     def perform_create(self, serializer):
         conversation = self.get_conversation()
 
         serializer.save(
             conversation=conversation,
-        )    
+        )
 
 class MessageDetailAPIView(generics.RetrieveUpdateDestroyAPIView):
     serializer_class = MessageSerializer
