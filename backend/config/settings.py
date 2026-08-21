@@ -50,6 +50,7 @@ INSTALLED_APPS = [
     # Third-party
     "rest_framework",
     "corsheaders",
+    "drf_spectacular",
 
     # Local
     "core",
@@ -162,6 +163,7 @@ REST_FRAMEWORK = {
     "DEFAULT_RENDERER_CLASSES": [
         "rest_framework.renderers.JSONRenderer",
     ],
+    "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
 }
 
 # CORS
@@ -172,3 +174,14 @@ EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
 DEFAULT_FROM_EMAIL = "noreply@aicommunicationassistant.local"
 
 FRONTEND_URL = "http://localhost:3000"
+
+SPECTACULAR_SETTINGS = {
+    "TITLE": "AI Communication Assistant API",
+    "DESCRIPTION": (
+        "API documentation for the AI Communication Assistant. "
+        "Provides authentication, conversations, messages, and "
+        "AI-powered communication capabilities."
+    ),
+    "VERSION": "1.0.0",
+    "SERVE_INCLUDE_SCHEMA": False,
+}

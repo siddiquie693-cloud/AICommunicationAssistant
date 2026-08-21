@@ -4,6 +4,10 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated
 from rest_framework_simplejwt.views import TokenObtainPairView
+from drf_spectacular.utils import (
+    extend_schema,
+    extend_schema_view,
+)
 from .models import(
     EmailVerificationToken,
     PasswordResetToken,
@@ -37,6 +41,11 @@ User = get_user_model()
 class UserRegistrationAPIVIew(APIView):
     permission_classes = [AllowAny]
 
+    @extend_schema(
+            request=UserRegistrationSerializer,
+            responses={201: UserRegistrationSerializer},
+    )
+
     def post(self, request):
         serializer = UserRegistrationSerializer(data=request.data)
 
@@ -66,6 +75,10 @@ class UserRegistrationAPIVIew(APIView):
 class CurentUserAPIVIew(APIView):
     permission_classes = [IsAuthenticated]
 
+    @extend_schema(
+            responses={200: UserRegistrationSerializer},
+    )
+
     def get(self, request):
         serializer = UserRegistrationSerializer(request.user)
 
@@ -76,6 +89,11 @@ class CurentUserAPIVIew(APIView):
 
 class LogoutAPIView(APIView):
     permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        request=LogoutSerializer,
+        responses={200: dict},
+    )
 
     def post(self, request):
         serializer = LogoutSerializer(data=request.data)
@@ -89,9 +107,18 @@ class LogoutAPIView(APIView):
             },
             status=status.HTTP_200_OK,
         )
-
+@extend_schema_view(
+    get=extend_schema(
+        responses={200: UserProfileSerializer},
+    ),
+    patch=extend_schema(
+        request=UserProfileSerializer,
+        responses={200: UserProfileSerializer},
+    ),
+)
 class UserProfileAPIView(APIView):
     permission_classes = [IsAuthenticated]
+
 
     def get(self, request):
         serializer = UserProfileSerializer(request.user)
@@ -118,6 +145,11 @@ class UserProfileAPIView(APIView):
 class ChangePasswordAPIView(APIView):
     permission_classes = [IsAuthenticated]
 
+    @extend_schema(
+        request=ChangePasswordSerializer,
+        responses={200: dict},
+    )
+
     def post(self, request):
         serializer = ChangePasswordSerializer(
             data=request.data,
@@ -136,6 +168,11 @@ class ChangePasswordAPIView(APIView):
 
 class EmailVerificationAPIView(APIView):
     permission_classes = [AllowAny]
+
+    @extend_schema(
+        request=EmailVerificayionSerializer,
+        responses={200: dict},
+    )
 
     def post(self, request):
         serializer = EmailVerificayionSerializer(
@@ -171,6 +208,11 @@ class EmailVerificationAPIView(APIView):
 class ForgotPasswordAPIView(APIView):
     permission_classes = [AllowAny]
 
+    @extend_schema(
+        request=ForgotPasswordSerializer,
+        responses={200: dict},
+    )
+
     def post(self, request):
         serializer = ForgotPasswordSerializer(
             data=request.data,
@@ -204,6 +246,11 @@ class ForgotPasswordAPIView(APIView):
 class ResetPasswordAPIView(APIView):
     permission_classes = [AllowAny]
 
+    @extend_schema(
+        request=ResetPasswordSerializer,
+        responses={200: dict},
+    )
+
     def post(self, request):
         serializer = ResetPasswordSerializer(
             data=request.data,
@@ -224,6 +271,11 @@ class UserLoginAPIView(TokenObtainPairView):
 
 class ResendVerificationAPIView(APIView):
     permission_classes = [AllowAny]
+
+    @extend_schema(
+        request=ResendVerificationSerializer,
+        responses={200: dict},
+    )
 
     def post(self, request):
         serializer = ResendVerificationSerializer(
@@ -255,6 +307,10 @@ class ResendVerificationAPIView(APIView):
 
 class LanguageListAPIView(APIView):
     permission_classes = [AllowAny]
+
+    @extend_schema(
+        responses={200: LanguageSerializer(many=True)},
+    )
 
     def get(self, request):
         languages = Language.objects.filter(
