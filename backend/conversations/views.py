@@ -6,6 +6,9 @@ from .models import Conversation, Message
 from django.utils import timezone
 from rest_framework.response import Response
 from rest_framework import status
+from conversations.services.ai_conversation_service import (
+    AIConversationService,
+)
 
 from .pagination import (
     ConversationPagination,
@@ -195,10 +198,16 @@ class MessageListCreateAPIView(generics.ListCreateAPIView):
 
     def perform_create(self, serializer):
         conversation = self.get_conversation()
-
-        serializer.save(
+        user_message = serializer.save(
             conversation=conversation,
+            sender_type=Message.SENDER_USER,
         )
+        ai_service = AIConversationService()
+        ai_service.generate_response(
+            conversation=conversation,
+            user_message=user_message,
+        )
+
 
 class MessageDetailAPIView(generics.RetrieveUpdateDestroyAPIView):
     serializer_class = MessageSerializer
