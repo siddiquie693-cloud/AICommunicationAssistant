@@ -74,7 +74,7 @@ class AIConversationServiceTests(TestCase):
     )
     @patch(
         "conversations.services.ai_conversation_service.config"
-    )    
+    )
     def test_provider_is_loaded_from_environment(
         self,
         mock_config,
