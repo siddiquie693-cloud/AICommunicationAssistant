@@ -1,3 +1,4 @@
+from unittest.mock import patch
 from django.test import TestCase
 
 from conversations.models import Conversation, Message
@@ -66,4 +67,32 @@ class AIConversationServiceTests(TestCase):
         self.assertEqual(
             self.conversation.messages.count(),
             2,
+        )
+
+    @patch(
+        "conversations.services.ai_conversation_service.get_ai_provider"
+    )
+    @patch(
+        "conversations.services.ai_conversation_service.config"
+    )    
+    def test_provider_is_loaded_from_environment(
+        self,
+        mock_config,
+        mock_get_ai_provider,
+    ):
+        mock_config.return_value = "mock"
+
+        service = AIConversationService()
+
+        mock_config.assert_called_once_with(
+            "AI_PROVIDER",
+            default="mock",
+        )
+
+        mock_get_ai_provider.assert_called_once_with(
+            "mock",
+        )
+
+        self.assertIsNotNone(
+            service.ai_service,
         )

@@ -1,6 +1,6 @@
 from ai.providers.base import AIProvider
 from ai.providers.mock import MockAIProvider
-
+from ai.providers.openai import OpenAIProvider
 
 def get_ai_provider(provider_name: str = "mock") -> AIProvider:
     """
@@ -19,6 +19,9 @@ def get_ai_provider(provider_name: str = "mock") -> AIProvider:
 
     if provider_name == "mock":
         return MockAIProvider()
+
+    if provider_name == "openai":
+        return OpenAIProvider()
 
     raise ValueError(
         f"Unsupported AI provider: {provider_name}"
