@@ -1,6 +1,9 @@
 from unittest.mock import Mock, patch
+
 from django.test import SimpleTestCase
+
 from ai.providers.openai import OpenAIProvider
+
 
 class OpenAIProviderTests(SimpleTestCase):
 
@@ -36,7 +39,7 @@ class OpenAIProviderTests(SimpleTestCase):
         self.assertEqual(
             response,
             "Hello from OpenAI",
-        )    
+        )
 
         mock_client.chat.completions.create.assert_called_once()
 
@@ -49,12 +52,12 @@ class OpenAIProviderTests(SimpleTestCase):
                     content="System-aware response"
                 )
             )
-        ] 
+        ]
 
         mock_client = Mock()
         mock_client.chat.completions.create.return_value = (
             mock_response
-        )   
+        )
 
         mock_openai.return_value = mock_client
 
@@ -70,7 +73,7 @@ class OpenAIProviderTests(SimpleTestCase):
         response = provider.generate(
             "Hello AI",
             system_prompt="You are helpful.",
-        )    
+        )
 
         self.assertEqual(
             response,
@@ -101,5 +104,8 @@ class OpenAIProviderTests(SimpleTestCase):
             {"OPENAI_API_KEY": ""},
             clear=False,
         ):
-            with self.assertRaises(ValueError):
-                OpenAIProvider()    
+            with self.assertRaisesRegex(
+                ValueError,
+                "OPENAI_API_KEY is not configured.",
+            ):
+                OpenAIProvider()
