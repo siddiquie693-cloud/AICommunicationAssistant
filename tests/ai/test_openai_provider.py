@@ -1,6 +1,7 @@
 from unittest.mock import Mock, patch
 
 from django.test import SimpleTestCase
+from ai.providers.exceptions import AIProviderError
 
 from ai.providers.openai import OpenAIProvider
 
@@ -42,6 +43,25 @@ class OpenAIProviderTests(SimpleTestCase):
         )
 
         mock_client.chat.completions.create.assert_called_once()
+
+        call_kwargs = (
+            mock_client.chat.completions.create.call_args.kwargs
+        )
+
+        self.assertEqual(
+            call_kwargs["model"],
+            "gpt-4o-mini",
+        )
+
+        self.assertEqual(
+            call_kwargs["messages"],
+            [
+                {
+                    "role": "user",
+                    "content": "Hello AI",
+                },
+            ],
+        )
 
     @patch("ai.providers.openai.OpenAI")
     def test_generate_with_system_prompt(self, mock_openai):
@@ -109,3 +129,28 @@ class OpenAIProviderTests(SimpleTestCase):
                 "OPENAI_API_KEY is not configured.",
             ):
                 OpenAIProvider()
+
+    @patch("ai.providers.openai.OpenAI")
+    def test_generate_raises_provider_error_on_openai_failure(self, mock_openai):
+        mock_client = Mock()
+
+        mock_client.chat.completions.create.side_effect = (
+            RuntimeError("OpenAI API failed")
+        )
+
+        mock_openai.return_value = mock_client
+
+        with patch.dict(
+            "os.environ",
+            {
+                "OPENAI_API_KEY": "test-api-key",
+                "OPENAI_MODEL": "gpt-4o-mini",
+            },
+        ):
+            provider = OpenAIProvider()
+
+        with self.assertRaisesRegex(
+            AIProviderError,
+            "Failed to generate response from OpenAI.",
+        ):
+            provider.generate("Hello AI")                

@@ -2,6 +2,7 @@ from decouple import config
 from openai import OpenAI
 
 from ai.providers.base import AIProvider
+from ai.providers.exceptions import AIProviderError
 
 
 class OpenAIProvider(AIProvider):
@@ -53,9 +54,14 @@ class OpenAIProvider(AIProvider):
             }
         )
 
-        response = self.client.chat.completions.create(
-            model=self.model,
-            messages=messages,
-        )
+        try:
+            response = self.client.chat.completions.create(
+                model=self.model,
+                messages=messages,
+            )
+        except Exception as exc:
+            raise AIProviderError(
+                "Failed to generate response from OpenAI."
+            ) from exc
 
         return response.choices[0].message.content or ""
