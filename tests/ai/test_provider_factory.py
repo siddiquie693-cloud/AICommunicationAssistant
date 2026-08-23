@@ -1,9 +1,9 @@
 from unittest.mock import patch
+
 from django.test import SimpleTestCase
 
 from ai.providers.factory import get_ai_provider
 from ai.providers.mock import MockAIProvider
-from ai.providers.openai import OpenAIProvider
 
 
 class ProviderFactoryTests(SimpleTestCase):
@@ -15,6 +15,7 @@ class ProviderFactoryTests(SimpleTestCase):
             provider,
             MockAIProvider,
         )
+
     @patch("ai.providers.factory.OpenAIProvider")
     def test_openai_provider(self, mock_provider):
         provider = get_ai_provider("openai")
@@ -25,13 +26,13 @@ class ProviderFactoryTests(SimpleTestCase):
             mock_provider.return_value,
         )
 
-    def test_provider_name_is_case_insenstive(self):
+    def test_provider_name_is_case_insensitive(self):
         provider = get_ai_provider("MoCk")
 
         self.assertIsInstance(
             provider,
             MockAIProvider,
-        )    
+        )
 
     def test_provider_name_is_trimmed(self):
         provider = get_ai_provider(" mock ")
@@ -39,7 +40,7 @@ class ProviderFactoryTests(SimpleTestCase):
         self.assertIsInstance(
             provider,
             MockAIProvider,
-        )    
+        )
 
     def test_unsupported_provider_raises_error(self):
         with self.assertRaises(ValueError) as context:
@@ -48,4 +49,45 @@ class ProviderFactoryTests(SimpleTestCase):
         self.assertEqual(
             str(context.exception),
             "Unsupported AI provider: invalid",
-        )        
+        )
+
+    @patch("ai.providers.factory.config")
+    @patch("ai.providers.factory.OpenAIProvider")
+    def test_provider_is_loaded_from_environment(
+        self,
+        mock_openai_provider,
+        mock_config,
+    ):
+        mock_config.return_value = "openai"
+
+        provider = get_ai_provider()
+
+        mock_config.assert_called_once_with(
+            "AI_PROVIDER",
+            default="mock",
+        )
+        mock_openai_provider.assert_called_once()
+
+        self.assertIs(
+            provider,
+            mock_openai_provider.return_value,
+        )
+
+    @patch("ai.providers.factory.config")
+    def test_provider_defaults_to_mock_from_environment(
+        self,
+        mock_config,
+    ):
+        mock_config.return_value = "mock"
+
+        provider = get_ai_provider()
+
+        mock_config.assert_called_once_with(
+            "AI_PROVIDER",
+            default="mock",
+        )
+
+        self.assertIsInstance(
+            provider,
+            MockAIProvider,
+        )
