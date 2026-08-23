@@ -1,4 +1,3 @@
-from decouple import config
 from ai.providers.factory import get_ai_provider
 from ai.services.ai_service import AIService
 
@@ -12,11 +11,6 @@ class AIConversationService:
     """
 
     def __init__(self, provider_name=None):
-        if provider_name is None:
-            provider_name = config(
-                "AI_PROVIDER",
-                default="mock",
-            )
         provider = get_ai_provider(provider_name)
         self.ai_service = AIService(provider)
 

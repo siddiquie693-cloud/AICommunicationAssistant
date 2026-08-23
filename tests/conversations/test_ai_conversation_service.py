@@ -1,4 +1,5 @@
 from unittest.mock import patch
+
 from django.test import TestCase
 
 from conversations.models import Conversation, Message
@@ -72,26 +73,16 @@ class AIConversationServiceTests(TestCase):
     @patch(
         "conversations.services.ai_conversation_service.get_ai_provider"
     )
-    @patch(
-        "conversations.services.ai_conversation_service.config"
-    )
-    def test_provider_is_loaded_from_environment(
+    def test_provider_is_loaded_from_factory(
         self,
-        mock_config,
         mock_get_ai_provider,
     ):
-        mock_config.return_value = "mock"
+        mock_provider = object()
+        mock_get_ai_provider.return_value = mock_provider
 
         service = AIConversationService()
 
-        mock_config.assert_called_once_with(
-            "AI_PROVIDER",
-            default="mock",
-        )
-
-        mock_get_ai_provider.assert_called_once_with(
-            "mock",
-        )
+        mock_get_ai_provider.assert_called_once_with(None)
 
         self.assertIsNotNone(
             service.ai_service,
