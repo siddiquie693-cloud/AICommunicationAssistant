@@ -56,7 +56,7 @@ class AIConversationServiceTests(TestCase):
 
         self.assertEqual(
             assistant_message.content,
-            "Mock AI response: Hello AI",
+            "Mock AI response: User: Hello AI",
         )
 
     def test_generate_response_saves_message(self):
@@ -86,4 +86,31 @@ class AIConversationServiceTests(TestCase):
 
         self.assertIsNotNone(
             service.ai_service,
+        )
+
+    def test_generate_response_includes_conversation_history(self):
+        Message.objects.create(
+            conversation=self.conversation,
+            sender_type=Message.SENDER_ASSISTANT,
+            content="Hello! How can I help?",
+        )
+
+        second_user_message = Message.objects.create(
+            conversation=self.conversation,
+            sender_type=Message.SENDER_USER,
+            content="What can you help me with?",
+        )
+
+        assistant_message = self.service.generate_response(
+            self.conversation,
+            second_user_message,
+        )
+        self.assertEqual(
+            assistant_message.content,
+            (
+                "Mock AI response: "
+                "User: Hello AI\n"
+                "Assistant: Hello! How can I help?\n"
+                "User: What can you help me with?"
+            ),
         )
