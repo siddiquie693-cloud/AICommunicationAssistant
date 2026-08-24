@@ -56,7 +56,7 @@ class AIConversationServiceTests(TestCase):
 
         self.assertEqual(
             assistant_message.content,
-            "Mock AI response: User: Hello AI",
+            "Mock AI response: Hello AI",
         )
 
     def test_generate_response_saves_message(self):

@@ -15,6 +15,7 @@ class AIService:
         prompt: str,
         *,
         system_prompt: str | None = None,
+        messages: list[dict[str, str]] | None = None,
     ) -> str:
         """
         Generate an AI response through the configured provider.
@@ -25,4 +26,5 @@ class AIService:
         return self.provider.generate(
             prompt.strip(),
             system_prompt=system_prompt,
+            messages=messages,
         )

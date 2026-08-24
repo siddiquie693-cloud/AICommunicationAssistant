@@ -11,7 +11,10 @@ class OpenAIProvider(AIProvider):
     """
 
     def __init__(self):
-        self.api_key = config("OPENAI_API_KEY", default="")
+        self.api_key = config(
+            "OPENAI_API_KEY",
+            default="",
+        )
 
         if not self.api_key:
             raise ValueError(
@@ -23,8 +26,27 @@ class OpenAIProvider(AIProvider):
             default="gpt-4o-mini",
         )
 
+        self.temperature = config(
+            "OPENAI_TEMPERATURE",
+            default=0.7,
+            cast=float,
+        )
+
+        self.max_tokens = config(
+            "OPENAI_MAX_TOKENS",
+            default=1000,
+            cast=int,
+        )
+
+        self.timeout = config(
+            "OPENAI_TIMEOUT",
+            default=30,
+            cast=int,
+        )
+
         self.client = OpenAI(
             api_key=self.api_key,
+            timeout=self.timeout,
         )
 
     def generate(
@@ -32,22 +54,26 @@ class OpenAIProvider(AIProvider):
         prompt: str,
         *,
         system_prompt: str | None = None,
+        messages: list[dict[str, str]] | None = None,
     ) -> str:
         """
         Generate a response using OpenAI.
         """
 
-        messages = []
+        if messages is not None:
+            request_messages = list(messages)
+        else:
+            request_messages = []    
 
         if system_prompt:
-            messages.append(
+            request_messages.append(
                 {
                     "role": "system",
                     "content": system_prompt,
                 }
             )
 
-        messages.append(
+        request_messages.append(
             {
                 "role": "user",
                 "content": prompt,
@@ -57,7 +83,9 @@ class OpenAIProvider(AIProvider):
         try:
             response = self.client.chat.completions.create(
                 model=self.model,
-                messages=messages,
+                messages=request_messages,
+                temperature=self.temperature,
+                max_tokens=self.max_tokens,
             )
         except Exception as exc:
             raise AIProviderError(

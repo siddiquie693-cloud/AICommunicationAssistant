@@ -13,8 +13,30 @@ class MockAIProvider(AIProvider):
         prompt: str,
         *,
         system_prompt: str | None = None,
+        messages: list[dict[str, str]] | None = None,
     ) -> str:
         """
         Return a deterministic mock response.
         """
-        return f"Mock AI response: {prompt}"
+
+        if not messages or len(messages) == 1:
+            return f"Mock AI response: {prompt}"
+
+        formatted_messages = []
+
+        for message in messages:
+            role = message["role"].capitalize()
+            content = message["content"]
+
+            formatted_messages.append(
+                f"{role}: {content}"
+            )
+
+        conversation_context = "\n".join(
+            formatted_messages
+        )    
+
+        return (
+            f"Mock AI response: "
+            f"{conversation_context}"
+        )

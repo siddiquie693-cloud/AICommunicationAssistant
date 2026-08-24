@@ -14,35 +14,36 @@ class AIConversationService:
         provider = get_ai_provider(provider_name)
         self.ai_service = AIService(provider)
 
-    def _build_prompt(
+    def _build_messages(
         self,
         conversation: Conversation,
-        user_message: Message,
-    ) -> str:
+    ) -> list[dict[str, str]]:
         """
-        Build a prompt containing the previous conversation history
-        and the current user message.
+        Build structured AI messages from conversation history.
         """
 
-        messages = (
-            conversation.messages
-            .filter(created_at__lte=user_message.created_at)
-            .order_by("created_at", "id")
+        messages = []
+
+        conversation_messages = conversation.messages.order_by(
+            "created_at",
+            "id",
         )
 
-        history = []
-
-        for message in messages:
-            if message.sender_type == Message.SENDER_USER:
-                role = "User"
-            else:
-                role = "Assistant"
-
-            history.append(
-                f"{role}: {message.content}"
+        for message in conversation_messages:
+            role = (
+                "user"
+                if message.sender_type == Message.SENDER_USER
+                else "assistant"
             )
 
-        return "\n".join(history)
+            messages.append(
+                {
+                    "role": role,
+                    "content": message.content,
+                }
+            )
+
+        return messages    
 
     def generate_response(
         self,
@@ -50,17 +51,14 @@ class AIConversationService:
         user_message: Message,
     ) -> Message:
         """
-        Generate an AI response using the conversation history
-        and save it to the same conversation.
+        Generate an AI response using the conversation history.
         """
 
-        prompt = self._build_prompt(
-            conversation,
-            user_message,
-        )
+        messages = self._build_messages(conversation)
 
         response_text = self.ai_service.generate_response(
-            prompt,
+            user_message.content,
+            messages=messages,
         )
 
         return Message.objects.create(

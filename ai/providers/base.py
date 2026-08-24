@@ -14,6 +14,7 @@ class AIProvider(ABC):
         prompt: str,
         *,
         system_prompt: str | None = None,
+        messages: list[dict[str, str]] | None = None,
     ) -> str:
         """
         Generate a response from the AI provider.
