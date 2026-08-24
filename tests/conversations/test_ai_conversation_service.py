@@ -110,7 +110,55 @@ class AIConversationServiceTests(TestCase):
             (
                 "Mock AI response: "
                 "User: Hello AI\n"
-                "Assistant: Hello! How can I help?\n"
-                "User: What can you help me with?"
+                "Assistant: Hello! How can I help?"
             ),
+        )
+
+    @patch("conversations.services.ai_conversation_service.config")
+    def test_memory_message_limit(
+        self,
+        mock_config,
+    ):
+        mock_config.side_effect = (
+            lambda key, default=None, cast=None: (
+                3
+                if key == "AI_MEMORY_MESSAGE_LIMIT"
+                else default
+            )
+        )
+
+        service = AIConversationService(
+            provider_name="mock",
+        )
+
+        for index in range(5):
+            Message.objects.create(
+                conversation=self.conversation,
+                sender_type=Message.SENDER_USER,
+                content=f"Message {index}",
+            )
+
+        messages = service._build_messages(
+            self.conversation,
+            exclude_message_id=self.user_message.id,
+        )    
+
+        self.assertEqual(
+            len(messages),
+            3,
+        )
+
+        self.assertEqual(
+            messages[0]["content"],
+            "Message 2",
+        )
+
+        self.assertEqual(
+            messages[1]["content"],
+            "Message 3",
+        )
+
+        self.assertEqual(
+            messages[2]["content"],
+            "Message 4",
         )
