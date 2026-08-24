@@ -22,6 +22,7 @@ class AIProvider(ABC):
         Args:
             prompt: User prompt.
             system_prompt: Optional system-level instruction.
+            messages: Optional conversation history.
 
         Returns:
             Generated text response.

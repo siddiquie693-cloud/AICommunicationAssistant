@@ -64,7 +64,6 @@ class OpenAIProvider(AIProvider):
             request_messages = list(messages)
         else:
             request_messages = []    
-
         if system_prompt:
             request_messages.append(
                 {
