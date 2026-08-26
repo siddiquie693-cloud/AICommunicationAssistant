@@ -195,3 +195,53 @@ class AIMessageAPITests(APITestCase):
             response.status_code,
             status.HTTP_401_UNAUTHORIZED,
         )
+
+    def test_create_message_uses_conversation_history(self):
+        first_response = self.client.post(
+            self.url,
+            {
+                "sender_type": "user",
+                "content": "Hello AI",
+            },
+            format="json",
+        )    
+
+        self.assertEqual(
+            first_response.status_code,
+            status.HTTP_201_CREATED,
+        )
+
+        second_response = self.client.post(
+            self.url,
+            {
+                "sender_type": "user",
+                "content": "What can you help me with?",
+            },
+            format="json",
+        )
+
+        self.assertEqual(
+            second_response.status_code,
+            status.HTTP_201_CREATED,
+        )
+
+        assistant_messages = Message.objects.filter(
+            conversation=self.conversation,
+            sender_type=Message.SENDER_ASSISTANT,
+        ).order_by("created_at", "id")
+
+        self.assertEqual(
+            assistant_messages.count(),
+            2,
+        )
+
+        second_assistant_message = assistant_messages[1]
+
+        self.assertEqual(
+            second_assistant_message.content,
+            (
+                "Mock AI response: "
+                "User: Hello AI\n"
+                "Assistant: Mock AI response: Hello AI"
+            ),
+        )
