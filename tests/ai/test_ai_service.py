@@ -83,3 +83,37 @@ class AIServiceTests(SimpleTestCase):
             "AI provider failed.",
         ):
             service.generate_response("Hello AI")
+
+    def test_generate_response_forwards_system_prompt_and_messages(self):
+        provider = Mock()
+        provider.generate.return_value = "AI response"
+
+        service = AIService(provider)
+
+        messages = [
+            {
+                "role": "user",
+                "content": "Hello AI",
+            },
+            {
+                "role": "assistant",
+                "content": "Hello! How can I help?",
+            },
+        ]     
+
+        response = service.generate_response(
+            "What can you do?",
+            system_prompt="You are a helpful assistant.",
+            messages=messages,
+        )   
+
+        self.assertEqual(
+            response,
+            "AI response",
+        )
+
+        provider.generate.assert_called_once_with(
+            "What can you do?",
+            system_prompt="You are a helpful assistant.",
+            messages=messages,
+        )

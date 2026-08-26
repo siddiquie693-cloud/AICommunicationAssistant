@@ -261,3 +261,53 @@ class AIConversationServiceTests(TestCase):
             "AI response",
         )
 
+    @patch(
+        "conversations.services.ai_conversation_service.AIService.generate_response"
+    )    
+    def test_generate_response_passes_system_prompt_and_history(
+        self,
+        mock_generate_response,
+    ):
+        mock_generate_response.return_value = "AI response"
+
+        Message.objects.create(
+            conversation=self.conversation,
+            sender_type=Message.SENDER_ASSISTANT,
+            content="Hello! How can I help?",
+        )
+
+        second_user_message = Message.objects.create(
+            conversation=self.conversation,
+            sender_type=Message.SENDER_USER,
+            content="What can you do?",
+        )
+
+        assistant_message = self.service.generate_response(
+            self.conversation,
+            second_user_message,
+        )
+
+        mock_generate_response.assert_called_once_with(
+            "What can you do?",
+            system_prompt=(
+                "You are a helpful AI communication assistant. "
+                "Answer clearly, accurately, and naturally. "
+                "Maintain context from the conversation history."
+            ),
+            messages=[
+                {
+                    "role": "user",
+                    "content": "Hello AI",
+                },
+                {
+                    "role": "assistant",
+                    "content": "Hello! How can I help?",
+                },
+            ],
+        )
+
+        self.assertEqual(
+            assistant_message.content,
+            "AI response",
+        )
+
