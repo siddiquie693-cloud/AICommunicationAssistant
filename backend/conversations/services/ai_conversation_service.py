@@ -3,7 +3,7 @@ from ai.services.ai_service import AIService
 from decouple import config
 
 from conversations.models import Conversation, Message
-
+from ai.prompts.conversation import CONVERSATION_SYSTEM_PROMPT
 
 class AIConversationService:
     """
@@ -86,6 +86,7 @@ class AIConversationService:
 
         response_text = self.ai_service.generate_response(
             user_message.content,
+            system_prompt=CONVERSATION_SYSTEM_PROMPT,
             messages=messages,
         )
 

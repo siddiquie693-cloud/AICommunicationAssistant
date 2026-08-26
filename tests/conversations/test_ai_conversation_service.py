@@ -237,3 +237,27 @@ class AIConversationServiceTests(TestCase):
             [],
         )
 
+    @patch(
+        "conversations.services.ai_conversation_service.CONVERSATION_SYSTEM_PROMPT",
+        "Test system prompt",
+    )    
+    @patch("conversations.services.ai_conversation_service.AIService.generate_response")
+    def test_generate_response_uses_conversation_system_prompt(self, mock_generate_response):
+        mock_generate_response.return_value = "AI response"
+
+        assistant_message = self.service.generate_response(
+            self.conversation,
+            self.user_message,
+        )
+
+        mock_generate_response.assert_called_once_with(
+            "Hello AI",
+            system_prompt="Test system prompt",
+            messages=[],
+        )
+
+        self.assertEqual(
+            assistant_message.content,
+            "AI response",
+        )
+
