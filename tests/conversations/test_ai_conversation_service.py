@@ -162,3 +162,78 @@ class AIConversationServiceTests(TestCase):
             messages[2]["content"],
             "Message 4",
         )
+
+    @patch("conversations.services.ai_conversation_service.config")
+    def test_memory_message_limit_default_to_20(self, mock_config):
+        mock_config.side_effect = (
+            lambda key, default=None, cast=None: default
+        )
+
+        service = AIConversationService(
+            provider_name="mock",
+        )
+
+        self.assertEqual(
+            service.memory_message_limit,
+            20,
+        )
+
+        mock_config.assert_called_once_with(
+            "AI_MEMORY_MESSAGE_LIMIT",
+            default=20,
+            cast=int,
+        )
+
+    @patch("conversations.services.ai_conversation_service.config")
+    def test_memory_message_limit_zero(self, mock_config):
+        mock_config.side_effect = (
+            lambda key, default=None, cast=None: (
+                0
+                if key == "AI_MEMORY_MESSAGE_LIMIT"
+                else default
+            )
+        )    
+
+        service = AIConversationService(
+            provider_name="mock"
+        )
+
+        messages = service._build_messages(
+            self.conversation,
+            exclude_message_id=self.user_message.id,
+        )
+
+        self.assertEqual(
+            messages,
+            [],
+        )
+
+    @patch("conversations.services.ai_conversation_service.config")
+    def test_negative_memory_message_limit_raises_error(self, mock_config):
+        mock_config.side_effect = (
+            lambda key, default=None, cast=None: (
+                -1
+                if key == "AI_MEMORY_MESSAGE_LIMIT"
+                else default
+            )
+        )    
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "AI_MEMORY_MESSAGE_LIMIT cannot be negative.",
+        ):
+            AIConversationService(
+                provider_name="mock",
+            )
+
+    def test_current_user_message_is_excluded_from_memory(self):
+        messages = self.service._build_messages(
+            self.conversation,
+            exclude_message_id=self.user_message.id,
+        )        
+
+        self.assertEqual(
+            messages,
+            [],
+        )
+

@@ -21,6 +21,11 @@ class AIConversationService:
             cast=int,
         )
 
+        if self.memory_message_limit < 0:
+            raise ValueError(
+                "AI_MEMORY_MESSAGE_LIMIT cannot be negative."
+            )
+
     def _build_messages(
         self,
         conversation: Conversation,
