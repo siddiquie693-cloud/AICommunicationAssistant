@@ -60,10 +60,8 @@ class OpenAIProvider(AIProvider):
         Generate a response using OpenAI.
         """
 
-        if messages is not None:
-            request_messages = list(messages)
-        else:
-            request_messages = []    
+        request_messages = []
+
         if system_prompt:
             request_messages.append(
                 {
@@ -72,6 +70,9 @@ class OpenAIProvider(AIProvider):
                 }
             )
 
+        if messages is not None:
+            request_messages.extend(messages)
+            
         request_messages.append(
             {
                 "role": "user",

@@ -233,4 +233,76 @@ class OpenAIProviderTests(SimpleTestCase):
             AIProviderError,
             "Failed to generate response from OpenAI.",
         ):
-            provider.generate("Hello AI")                
+            provider.generate("Hello AI") 
+
+    @patch("ai.providers.openai.OpenAI")
+    def test_generate_with_system_prompt_and_messages(self, mock_openai):
+        mock_response = Mock()
+        mock_response.choices = [
+            Mock(
+                message=Mock(
+                    content="Context-aware response"
+                )
+            )
+        ]    
+
+        mock_client = Mock()
+        mock_client.chat.completions.create.return_value = (mock_response)
+        mock_openai.return_value = mock_client
+
+        with patch.dict(
+            "os.environ",
+            {
+                "OPENAI_API_KEY": "test-api-key",
+                "OPEANAI_MODEL": "gpt-4o-mini",
+            },
+        ):
+            provider = OpenAIProvider()
+
+        messages = [
+            {
+                "role": "user",
+                "content": "Hello AI",
+            },
+            {
+                "role": "assistant",
+                "content": "Hello! How can I help?",
+            },
+        ]
+
+        response = provider.generate(
+            "What can you help me with?",
+            system_prompt="You are a helpful assistant.",
+            messages=messages,
+        )                     
+
+        self.assertEqual(
+            response,
+            "Context-aware response",
+        )  
+
+        call_kwargs = (
+            mock_client.chat.completions.create.call_args.kwargs
+        )
+
+        self.assertEqual(
+            call_kwargs["messages"],
+            [
+                {
+                    "role": "system",
+                    "content": "You are a helpful assistant.",
+                },
+                {
+                    "role": "user",
+                    "content": "Hello AI",
+                },
+                {
+                    "role": "assistant",
+                    "content": "Hello! How can I help?",
+                },
+                {
+                    "role": "user",
+                    "content": "What can you help me with?",
+                },
+            ],
+        )
