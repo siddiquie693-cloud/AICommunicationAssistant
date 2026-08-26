@@ -1,6 +1,7 @@
 from rest_framework import generics
 from rest_framework.permissions import IsAuthenticated
 from django.shortcuts import get_object_or_404
+from ai.providers.exceptions import AIProviderError
 
 from .models import Conversation, Message
 from django.utils import timezone
@@ -195,6 +196,21 @@ class MessageListCreateAPIView(generics.ListCreateAPIView):
             ordering,
             "id" if ordering == "created_at" else "-id",
         )
+
+    def create(self, request, *args, **kwargs):
+        try:
+            return super().create(
+                request,
+                *args,
+                **kwargs,
+            )
+        except AIProviderError:
+            return Response(
+                {
+                    "detail": "AI service is temporarily unavailable.",
+                },
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
 
     def perform_create(self, serializer):
         conversation = self.get_conversation()

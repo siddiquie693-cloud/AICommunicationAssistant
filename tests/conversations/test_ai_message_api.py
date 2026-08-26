@@ -3,6 +3,8 @@ from django.contrib.auth import get_user_model
 from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APITestCase
+from unittest.mock import patch
+from ai.providers.exceptions import AIProviderError
 
 from conversations.models import Conversation, Message
 
@@ -244,4 +246,63 @@ class AIMessageAPITests(APITestCase):
                 "User: Hello AI\n"
                 "Assistant: Mock AI response: Hello AI"
             ),
+        )
+
+    @patch("conversations.services.ai_conversation_service.AIService.generate_response")
+    def test_ai_provider_failure_returns_service_unavailable(self, mock_generate_response):
+        mock_generate_response.side_effect = AIProviderError(
+            "AI provider failed."
+        )    
+
+        response = self.client.post(
+            self.url,
+            {
+                "sender_type": "user",
+                "content": "Hello AI",
+            },
+            format="json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_503_SERVICE_UNAVAILABLE,
+        )
+
+        self.assertEqual(
+            response.data["detail"],
+            "AI service is temporarily unavailable.",
+        )
+
+    @patch("conversations.services.ai_conversation_service.AIService.generate_response")
+    def test_ai_provider_failure_does_not_create_assistant_message(self, mock_generate_response):
+        mock_generate_response.side_effect = AIProviderError("AI provider failed.")
+
+        response = self.client.post(
+            self.url,
+            {
+                "sender_type": "user",
+                "content": "Hello AI",
+            },
+            format="json",
+        )   
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_503_SERVICE_UNAVAILABLE,
+        )
+
+        self.assertEqual(
+            Message.objects.filter(
+                conversation=self.conversation,
+                sender_type=Message.SENDER_USER,
+            ).count(),
+            1,
+        )
+
+        self.assertEqual(
+            Message.objects.filter(
+                conversation=self.conversation,
+                sender_type=Message.SENDER_ASSISTANT,
+            ).count(),
+            0,
         )
