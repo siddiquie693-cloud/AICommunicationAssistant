@@ -4,7 +4,7 @@ from ai.providers.mock import MockAIProvider
 from ai.providers.exceptions import AIProviderError
 from ai.services.ai_service import AIService
 from unittest.mock import Mock
-
+from ai.prompts.conversation import CONVERSATION_SYSTEM_PROMPT
 class AIServiceTests(SimpleTestCase):
 
     def setUp(self):
@@ -117,3 +117,19 @@ class AIServiceTests(SimpleTestCase):
             system_prompt="You are a helpful assistant.",
             messages=messages,
         )
+
+    def test_generate_response_uses_default_system_prompt(self):
+        provider = Mock()
+        provider.generate.return_value = "AI response"
+
+        service = AIService(provider)
+
+        response = service.generate_response("Hello AI")
+
+        self.assertEqual(response, "AI response")
+
+        provider.generate.assert_called_once_with(
+            "Hello AI",
+            system_prompt=CONVERSATION_SYSTEM_PROMPT,
+            messages=None,
+        )  

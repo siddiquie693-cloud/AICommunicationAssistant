@@ -90,6 +90,9 @@ class AIConversationService:
             messages=messages,
         )
 
+        if not response_text or not response_text.strip():
+            raise ValueError("AI response cannot be empty.")
+
         return Message.objects.create(
             conversation=conversation,
             sender_type=Message.SENDER_ASSISTANT,

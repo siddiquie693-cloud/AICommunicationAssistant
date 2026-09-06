@@ -1,5 +1,5 @@
 from ai.providers.base import AIProvider
-
+from ai.prompts.manager import PromptManager
 
 class AIService:
     """
@@ -22,6 +22,12 @@ class AIService:
         """
         if not prompt or not prompt.strip():
             raise ValueError("Prompt cannot be empty.")
+
+        if system_prompt is None:
+            PromptManager.validate_system_prompts()
+            system_prompt = (
+                PromptManager.get_conversation_system_prompt()
+            )
 
         return self.provider.generate(
             prompt.strip(),

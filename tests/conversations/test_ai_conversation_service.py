@@ -311,3 +311,22 @@ class AIConversationServiceTests(TestCase):
             "AI response",
         )
 
+    @patch("conversations.services.ai_conversation_service.AIService.generate_response")
+    def test_empty_ai_response_raises_error(self, mock_generate_response):
+        mock_generate_response.return_value = ""
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "AI response cannot be empty.",
+        ):
+            self.service.generate_response(
+                self.conversation,
+                self.user_message,
+            )    
+
+        self.assertEqual(
+            self.conversation.messages.count(),
+            1,
+        )    
+
+
