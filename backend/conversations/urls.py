@@ -4,6 +4,7 @@ from .views import (
     ConversationDetailAPIView,
     ConversationListCreateAPIView,
     ConversationRestoreAPIView,
+    AIMessageStreamAPIView,
     ConversationTrashListAPIView,
     MessageListCreateAPIView,
     MessageDetailAPIView,
@@ -28,6 +29,11 @@ urlpatterns = [
         "<int:pk>/restore/",
         ConversationRestoreAPIView.as_view(),
         name="conversation-restore",
+    ),
+    path(
+        "<int:conversation_id>/messages/stream/",
+        AIMessageStreamAPIView.as_view(),
+        name="message-stream",
     ),
     path(
         "<int:conversation_id>/messages/",

@@ -1,3 +1,4 @@
+from django.http import StreamingHttpResponse
 from rest_framework import generics
 from rest_framework.permissions import IsAuthenticated
 from django.shortcuts import get_object_or_404
@@ -224,6 +225,48 @@ class MessageListCreateAPIView(generics.ListCreateAPIView):
             user_message=user_message,
         )
 
+class AIMessageStreamAPIView(generics.GenericAPIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, *args, **kwargs):
+        conversation = get_object_or_404(
+            Conversation,
+            id=kwargs["conversation_id"],
+            user=request.user,
+            deleted_at__isnull=True,
+        )
+
+        content = request.data.get("content", "")
+
+        if not isinstance(content, str) or not content.strip():
+            return Response(
+                {
+                    "detail": "Message content cannot be empty.",
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        user_message = Message.objects.create(
+            conversation=conversation,
+            sender_type=Message.SENDER_USER,
+            content=content.strip(),
+        )
+
+        ai_service = AIConversationService()
+
+        def stream_response():
+            try:
+                yield from ai_service.generate_stream(
+                    conversation=conversation,
+                    user_message=user_message,
+                )
+            except AIProviderError:
+                return
+
+        return StreamingHttpResponse(
+            stream_response(),
+            content_type="text/plain",
+        )
 
 class MessageDetailAPIView(generics.RetrieveUpdateDestroyAPIView):
     serializer_class = MessageSerializer

@@ -1,7 +1,7 @@
 from unittest.mock import patch
 
 from django.test import TestCase
-
+from ai.prompts.conversation import CONVERSATION_SYSTEM_PROMPT
 from conversations.models import Conversation, Message
 from conversations.services.ai_conversation_service import (
     AIConversationService,
@@ -327,6 +327,127 @@ class AIConversationServiceTests(TestCase):
         self.assertEqual(
             self.conversation.messages.count(),
             1,
+        )   
+
+    @patch("conversations.services.ai_conversation_service.AIService.generate_stream")
+    def test_generate_stream(self, mock_generate_stream):
+        mock_generate_stream.return_value = iter(
+            ["Hello ", "from ", "AI"]
+        )     
+
+        chunks = list(
+            self.service.generate_stream(
+                self.conversation,
+                self.user_message,
+            )
+        )
+
+        self.assertEqual(
+            chunks,
+            ["Hello ", "from ", "AI"],
+        )
+
+    @patch("conversations.services.ai_conversation_service.AIService.generate_stream")
+    def test_generate_stream_uses_conversation_history(
+        self,
+        mock_generate_stream,
+    ):
+        Message.objects.create(
+            conversation=self.conversation,
+            sender_type=Message.SENDER_ASSISTANT,
+            content="Hello! How can I help?",
         )    
+
+        second_user_message = Message.objects.create(
+            conversation=self.conversation,
+            sender_type=Message.SENDER_USER,
+            content="What can you do?",
+        )
+
+        mock_generate_stream.return_value = iter(
+            ["AI ", "response"]
+        )
+
+        chunks = list(
+            self.service.generate_stream(
+                self.conversation,
+                second_user_message,
+            )
+        )
+
+        self.assertEqual(
+            chunks,
+            ["AI ", "response"],
+        )
+
+        mock_generate_stream.assert_called_once_with(
+            "What can you do?",
+            system_prompt=CONVERSATION_SYSTEM_PROMPT,
+            messages=[
+                {
+                    "role": "user",
+                    "content": "Hello AI",
+                },
+                {
+                    "role": "assistant",
+                    "content": "Hello! How can I help?",
+                },
+            ],
+        )
+
+    @patch("conversations.services.ai_conversation_service.AIService.generate_stream")
+    def test_generate_stream_saves_assistant_message(
+        self,
+        mock_generate_stream,
+    ):
+        mock_generate_stream.return_value = iter(
+            ["Hello ", "from ", "AI"]
+        )    
+
+        chunks = list(
+            self.service.generate_stream(
+                self.conversation,
+                self.user_message,
+            )
+        )
+
+        self.assertEqual(
+            chunks,
+            ["Hello ", "from ", "AI"],
+        )
+
+        assistant_message = Message.objects.get(
+            conversation=self.conversation,
+            sender_type=Message.SENDER_ASSISTANT,
+        )
+
+        self.assertEqual(
+            assistant_message.content,
+            "Hello from AI",
+        )
+
+    @patch("conversations.services.ai_conversation_service.AIService.generate_stream")
+    def test_generate_stream_empty_response_does_not_save_message(
+        self,
+        mock_generate_stream,
+    ):
+        mock_generate_stream.return_value = iter([])
+
+        chunks = list(
+            self.service.generate_stream(
+                self.conversation,
+                self.user_message,
+            )
+        )
+
+        self.assertEqual(chunks, [])
+
+        self.assertFalse(
+            Message.objects.filter(
+                conversation=self.conversation,
+                sender_type=Message.SENDER_ASSISTANT,
+            ).exists()
+        )
+
 
 

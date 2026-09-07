@@ -4,6 +4,7 @@ from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APITestCase
 from unittest.mock import patch
+from django.utils import timezone
 from ai.providers.exceptions import AIProviderError
 
 from conversations.models import Conversation, Message
@@ -306,3 +307,219 @@ class AIMessageAPITests(APITestCase):
             ).count(),
             0,
         )
+
+    @patch("conversations.views.AIConversationService.generate_stream")
+    def test_stream_message_returns_streaming_response(
+        self,
+        mock_generate_stream,
+    ):
+        mock_generate_stream.return_value = iter(
+            ["Hello ", "from ", "AI"]
+        )    
+
+        url = reverse(
+            "message-stream",
+            kwargs={
+                "conversation_id": self.conversation.id,
+            },
+        )
+
+        response = self.client.post(
+            url,
+            {
+                "content": "Hello AI",
+            },
+            format="json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_200_OK,
+        )
+
+        self.assertEqual(
+            response.get("Content-Type"),
+            "text/plain",
+        )
+
+        self.assertEqual(
+            b"".join(response.streaming_content),
+            b"Hello from AI",
+        )
+
+    def test_stream_message_requires_authentication(self):
+        self.client.force_authenticate(user=None)
+
+        url = reverse(
+            "message-stream",
+            kwargs={
+                "conversation_id": self.conversation.id,
+            },
+        )    
+
+        response = self.client.post(
+            url,
+            {
+                "content": "Hello AI",
+            },
+            format="json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_401_UNAUTHORIZED,
+        )
+
+    def test_stream_message_rejects_empty_content(self):
+        url = reverse(
+            "message-stream",
+            kwargs={
+                "conversation_id": self.conversation.id,
+            },
+        )    
+
+        response = self.client.post(
+            url,
+            {
+                "content": "  ",
+            },
+            format="json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_400_BAD_REQUEST,
+        )
+
+    def test_stream_message_creates_user_message(self):
+        url = reverse(
+            "message-stream",
+            kwargs={
+                "conversation_id": self.conversation.id,
+            },
+        )    
+
+        response = self.client.post(
+            url,
+            {
+                "content": "Hello AI",
+            },
+            format='json',
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_200_OK,
+        )
+
+        self.assertTrue(
+            Message.objects.filter(
+                conversation=self.conversation,
+                sender_type=Message.SENDER_USER,
+                content="Hello AI",
+            ).exists()
+        )
+
+    def test_stream_message_rejects_deleted_conversation(self):
+        self.conversation.deleted_at = timezone.now() 
+        self.conversation.save(update_fields=["deleted_at"])
+
+        url = reverse(
+            "message-stream",
+            kwargs={
+                "conversation_id": self.conversation.id,
+            },
+        )   
+
+        response = self.client.post(
+            url,
+            {
+                "content": "Hello AI",
+            },
+            format="json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_404_NOT_FOUND,
+        )
+
+    def test_stream_message_saves_assistant_message(self):
+        url = reverse(
+            "message-stream",
+            kwargs={
+                "conversation_id": self.conversation.id,
+            },
+        )    
+
+        response = self.client.post(
+            url,
+            {
+                "content": "Hello AI",
+            },
+            format="json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_200_OK,
+        )
+
+        streamed_content = b"".join(
+            response.streaming_content
+        )
+
+        self.assertEqual(
+            streamed_content,
+            b"Mock AI response: Hello AI",
+        )
+
+        self.assertTrue(
+            Message.objects.filter(
+                conversation=self.conversation,
+                sender_type=Message.SENDER_ASSISTANT,
+                content="Mock AI response: Hello AI",
+            ).exists()
+        )
+
+    @patch("conversations.views.AIConversationService.generate_stream")
+    def test_stream_message_handles_ai_provider_failure(
+        self,
+        mock_generate_stream,
+    ):
+        def failing_stream(*args, **kwargs):
+            raise AIProviderError(
+                "Provider unavailable"
+            )
+            yield
+        mock_generate_stream.side_effect = failing_stream
+
+        url = reverse(
+            "message-stream",
+            kwargs={
+                "conversation_id": self.conversation.id,
+            },
+        )    
+
+        response = self.client.post(
+            url,
+            {
+                "content": "Hello AI",
+            },
+            format="json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_200_OK,
+        )
+
+        streamed_content = b"".join(
+            response.streaming_content
+        )
+
+        self.assertEqual(
+            streamed_content,
+            b"",
+        )
+        

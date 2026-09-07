@@ -98,3 +98,39 @@ class AIConversationService:
             sender_type=Message.SENDER_ASSISTANT,
             content=response_text,
         )
+
+    def generate_stream(
+            self,
+            conversation: Conversation,
+            user_message: Message,
+    ):
+        """
+        Generate an AI response as a stream of text chunks
+        and save the complete response as an assistant message.
+        """
+
+        messages = self._build_messages(
+            conversation,
+            exclude_message_id=user_message.id,
+        )
+
+        chunks = self.ai_service.generate_stream(
+            user_message.content,
+            system_prompt=CONVERSATION_SYSTEM_PROMPT,
+            messages=messages,
+        )
+
+        collected_chunks = []
+
+        for chunk in chunks:
+            collected_chunks.append(chunk)
+            yield chunk
+
+        response_text = "".join(collected_chunks)
+
+        if response_text.strip():
+            Message.objects.create(
+                conversation=conversation,
+                sender_type=Message.SENDER_ASSISTANT,
+                content=response_text,
+            )    
