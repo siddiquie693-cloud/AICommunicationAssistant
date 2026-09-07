@@ -40,3 +40,25 @@ class MockAIProvider(AIProvider):
             f"Mock AI response: "
             f"{conversation_context}"
         )
+
+    def generate_stream(
+        self,
+        prompt: str,
+        *,
+        system_prompt: str | None = None,
+        messages: list[dict[str, str]] | None = None,
+    ):
+        """
+        Generate a response as a stream of text chunks.
+        """
+
+        response = self.generate(
+            prompt,
+            system_prompt=system_prompt,
+            messages=messages,
+        )
+
+        chunk_size = 10
+
+        for index in range(0, len(response), chunk_size):
+            yield response[index:index + chunk_size]

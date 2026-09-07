@@ -34,3 +34,28 @@ class AIService:
             system_prompt=system_prompt,
             messages=messages,
         )
+
+    def generate_stream(
+            self,
+            prompt: str,
+            *,
+            system_prompt: str | None = None,
+            messages: list[dict[str, str]] | None = None,
+    ):
+        """
+        Generate an AI response as a stream of text chunks.
+        """
+        if not prompt or not prompt.strip():
+            raise ValueError("Prompt cannot be empty.")
+
+        if system_prompt is None:
+            PromptManager.validate_system_prompts()
+            system_prompt = (
+                PromptManager.get_conversation_system_prompt()
+            )
+
+        return self.provider.generate_stream(
+            prompt.strip(),
+            system_prompt=system_prompt,
+            messages=messages,
+        )    

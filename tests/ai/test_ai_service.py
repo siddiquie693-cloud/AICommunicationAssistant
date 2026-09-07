@@ -133,3 +133,138 @@ class AIServiceTests(SimpleTestCase):
             system_prompt=CONVERSATION_SYSTEM_PROMPT,
             messages=None,
         )  
+
+    def test_generate_stream(self):
+        chunks = list(
+            self.service.generate_stream("Hello AI")
+        )    
+
+        self.assertGreater(len(chunks), 1)
+
+        response = "".join(chunks)
+
+        self.assertEqual(
+            response,
+            "Mock AI response: Hello AI",
+        )
+
+    def test_generate_stream_strips_prompt(self):
+        chunks = list(
+            self.service.generate_stream(
+                " Hello AI "
+            )
+        )    
+
+        response = "".join(chunks)
+
+        self.assertEqual(
+            response,
+            "Mock AI response: Hello AI",
+        )
+
+    def test_generate_stream_with_system_prompt(self):
+        chunks = list(
+            self.service.generate_stream(
+                "Hello AI",
+                system_prompt="You are helful.",
+            )
+        )    
+
+        response = "".join(chunks)
+
+        self.assertEqual(
+            response,
+            "Mock AI response: Hello AI",
+        )
+
+    def test_generate_stream_with_messages(self):
+        messages = [
+            {
+                "role": "user",
+                "content": "Hello AI",
+            },
+            {
+                "role": "assistant",
+                "content": "Hello! How can I help?",
+            },
+        ]    
+
+        chunks = list(
+            self.service.generate_stream(
+                "what can you do?",
+                messages=messages,
+            )
+        )
+
+        response = "".join(chunks)
+
+        self.assertEqual(
+            response,
+            "Mock AI response: "
+            "User: Hello AI\n"
+            "Assistant: Hello! How can I help?",
+        )
+
+    def test_generate_stream_empty_prompt_raises_error(self):
+        with self.assertRaises(ValueError):
+            list(
+                self.service.generate_stream("")
+            )    
+
+    def test_generate_stream_forwards_arguments(self):
+        provider = Mock()
+
+        provider.generate_stream.return_value = iter(
+            ["Hello ", "AI"]
+        )        
+
+        service = AIService(provider)
+
+        messages = [
+            {
+                "role": "user",
+                "content": "Previous message",
+            },
+        ]
+
+        chunks = list(
+            service.generate_stream(
+                "Current message",
+                system_prompt="You are helpful.",
+                messages=messages,
+            )
+        )
+
+        self.assertEqual(
+            chunks,
+            ["Hello ", "AI"],
+        )
+
+        provider.generate_stream.assert_called_once_with(
+            "Current message",
+            system_prompt="You are helpful.",
+            messages=messages,
+        )
+
+    def test_generate_stream_uses_default_system_prompt(self):
+        provider = Mock()
+        provider.generate_stream.return_value = iter(
+            ["AI response"]
+        )    
+
+        service = AIService(provider)
+
+        chunks = list(
+            service.generate_stream("Hello AI")
+        )
+
+        self.assertEqual(
+            chunks,
+            ["AI response"],
+        )
+
+        provider.generate_stream.assert_called_once_with(
+            "Hello AI",
+            system_prompt=CONVERSATION_SYSTEM_PROMPT,
+            messages=None,
+        )

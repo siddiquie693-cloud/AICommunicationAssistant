@@ -306,3 +306,143 @@ class OpenAIProviderTests(SimpleTestCase):
                 },
             ],
         )
+
+    @patch("ai.providers.openai.OpenAI")
+    def test_generate_stream_response(self, mock_openai):
+        chunks = [
+            Mock(
+                choices=[
+                    Mock(
+                        delta=Mock(content="Hello")
+                    )
+                ]
+            ),
+            Mock(
+                choices=[
+                    Mock(
+                        delta=Mock(content="from OpenAI")
+                    )
+                ]
+            ),
+        ]
+
+        mock_client = Mock()
+        mock_client.chat.completions.create.return_value = chunks
+
+        mock_openai.return_value = mock_client
+
+        with patch.dict(
+            "os.environ",
+            {
+                "OPENAI_API_KEY": "test-api-key",
+                "OPENAI_MODEL": "gpt-4o-mini",
+            },
+        ):
+            provider = OpenAIProvider()
+
+        result = list(
+            provider.generate_stream("Hello AI")
+        )
+
+        self.assertEqual(
+            result,
+            ["Hello", "from OpenAI"],
+        )       
+
+        call_kwargs = (
+            mock_client.chat.completions.create.call_args.kwargs
+        )
+
+        self.assertTrue(
+            call_kwargs["stream"]
+        )
+
+    @patch("ai.providers.openai.OpenAI")
+    def test_generate_stream_with_system_prompt(self, mock_openai):
+        chunks = [
+            Mock(
+                choices=[
+                    Mock(
+                        delta=Mock(content="Hello")
+                    )
+                ]
+            )
+        ] 
+
+        mock_client = Mock()
+        mock_client.chat.completions.create.return_value = chunks
+
+        mock_openai.return_value = mock_client
+
+        with patch.dict(
+            "os.environ",
+            {
+                "OPENAI_API_KEY": "test-api-key",
+                "OPENAI_MODEL": "gpt-4o-mini",
+            },
+        ):
+            provider = OpenAIProvider()
+
+        result = list(
+            provider.generate_stream(
+                "Hello AI",
+                system_prompt="You are helpful.",
+            )
+        )       
+
+        self.assertEqual(
+            result,
+            ["Hello"],
+        )
+
+        call_kwargs = (
+            mock_client.chat.completions.create.call_args.kwargs
+        )
+
+        self.assertEqual(
+            call_kwargs["messages"],
+            [
+                {
+                    "role": "system",
+                    "content": "You are helpful.",
+                },
+                {
+                    "role": "user",
+                    "content": "Hello AI",
+                },
+            ],
+        )
+
+        self.assertTrue(
+            call_kwargs["stream"]
+        )
+
+    @patch("ai.providers.openai.OpenAI")
+    def test_generate_stream_raise_provider_error(
+        self,
+        mock_openai,
+    ):
+        mock_client = Mock()
+
+        mock_client.chat.completions.create.side_effect = (
+            RuntimeError("OpenAI streaming failed")
+        )    
+
+        mock_openai.return_value = mock_client
+
+        with patch.dict(
+            "os.environ",
+            {
+                "OPENAI_API_KEY": "test-api-key",
+                "OPENAI_MODEL": "gpt-4o-mini",
+            },
+        ):
+            provider = OpenAIProvider()
+
+        with self.assertRaisesRegex(
+            AIProviderError,
+            "Failed to generate streaming response from OpenAI.",
+        ):
+            list(
+                provider.generate_stream("Hello AI")
+            )   

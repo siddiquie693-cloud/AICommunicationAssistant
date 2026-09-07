@@ -93,3 +93,54 @@ class OpenAIProvider(AIProvider):
             ) from exc
 
         return response.choices[0].message.content or ""
+
+    def generate_stream(
+        self,
+        prompt: str,
+        *,
+        system_prompt: str | None = None,
+        messages: list[dict[str, str]] | None = None,
+    ):
+        """
+        Generate a response using OpenAI as a stream.
+        """
+
+        request_messages = []
+
+        if system_prompt:
+            request_messages.append(
+                {
+                    "role": "system",
+                    "content": system_prompt,
+                }
+            )
+
+        if messages is not None:
+            request_messages.extend(messages)
+
+        request_messages.append(
+            {
+                "role": "user",
+                "content": prompt,
+            }
+        )
+
+        try:
+            response_stream = self.client.chat.completions.create(
+                model=self.model,
+                messages=request_messages,
+                temperature=self.temperature,
+                max_tokens=self.max_tokens,
+                stream=True,
+            )
+
+            for chunk in response_stream:
+                content = chunk.choices[0].delta.content
+
+                if content:
+                    yield content
+
+        except Exception as exc:
+            raise AIProviderError(
+                "Failed to generate streaming response from OpenAI."
+            ) from exc
