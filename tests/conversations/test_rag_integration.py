@@ -1,6 +1,10 @@
 from unittest.mock import MagicMock, patch
 
 from django.test import TestCase
+from unittest.mock import Mock
+from knowledge.services.rag import RAGService
+from knowledge.services.embeddings.mock import MockEmbeddingService
+from knowledge.services.vector_store.mock import MockVectorStore
 
 from conversations.models import Conversation, Message
 from conversations.services.ai_conversation_service import (
@@ -363,3 +367,111 @@ class RAGIntegrationTests(TestCase):
             self.user_message.content,
             top_k=5,
         )              
+
+    def test_generate_response_accepts_injected_rag_service(self):
+        rag_service = Mock()
+        rag_service.build_context.return_value = "Injected knowledge"
+
+        service = AIConversationService(
+            provider_name="mock",
+            rag_service=rag_service,
+        )
+
+        self.assertIs(service.rag_service, rag_service)    
+
+    def test_default_rag_service_is_created(self):
+        service = AIConversationService(
+            provider_name="mock",
+        )
+
+        self.assertIsNotNone(service.rag_service)
+        self.assertIsInstance(service.rag_service, RAGService)  
+
+    def test_default_rag_service_uses_injected_dependencies(self):
+        embedding_service = MockEmbeddingService()
+        vector_store = MockVectorStore()
+
+        service = AIConversationService(
+            provider_name="mock",
+            embedding_service=embedding_service,
+            vector_store=vector_store,
+        )      
+
+        self.assertIs(
+            service.rag_service.retrieval_service.embedding_service,
+            embedding_service,
+        )
+
+        self.assertIs(
+            service.rag_service.retrieval_service.vector_store,
+            vector_store,
+        )
+
+    def test_rag_top_k_can_be_configured(self):
+        rag_service = Mock()
+        rag_service.build_context.return_value = ""
+
+        service = AIConversationService(
+            provider_name="mock",
+            rag_service=rag_service,
+        )    
+
+        conversation = Conversation.objects.create(
+            user=self.user,
+            title="Test Conversation",
+        )
+
+        user_message = Message.objects.create(
+            conversation=conversation,
+            sender_type=Message.SENDER_USER,
+            content="what is RAG?",
+        )
+
+        service.generate_response(
+            conversation,
+            user_message,
+            rag_top_k=10,
+        )
+
+        rag_service.build_context.assert_called_once_with(
+            "what is RAG?",
+            top_k=10,
+        )
+
+    def test_generate_response_works_without_rag_context(self):
+        rag_service = Mock()
+        rag_service.build_context.return_value = ""
+
+        service = AIConversationService(
+            provider_name="mock",
+            rag_service=rag_service,
+        )
+
+        conversation = Conversation.objects.create(
+            user=self.user,
+            title="No Knowledge",
+        )
+
+        user_message = Message.objects.create(
+            conversation=conversation,
+            sender_type=Message.SENDER_USER,
+            content="Hello",
+        )
+
+        response = service.generate_response(
+            conversation,
+            user_message,
+        )
+
+        self.assertIsNotNone(response)
+        self.assertEqual(
+            response.sender_type,
+            Message.SENDER_ASSISTANT,
+        )
+
+        rag_service.build_context.assert_called_once_with(
+            "Hello",
+            top_k=5,
+        )    
+
+     

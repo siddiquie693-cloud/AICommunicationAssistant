@@ -1,5 +1,5 @@
 from django.test import SimpleTestCase
-
+from unittest.mock import Mock
 from knowledge.services.embeddings.mock import MockEmbeddingService
 from knowledge.services.retrieval import KnowledgeRetrievalService
 from knowledge.services.vector_store.mock import MockVectorStore
@@ -59,3 +59,36 @@ class KnowledgeRetrievalServiceTests(SimpleTestCase):
     def test_invalid_top_k_raises_error(self):
         with self.assertRaises(ValueError):
             self.service.retrieve("Python", top_k=0)
+
+    def test_retrieve_preserves_similarity_scores(self):
+        embedding_service = Mock()
+        embedding_service.embed.return_value = [1.0, 2.0, 3.0]
+
+        vector_store = Mock()
+        vector_store.search.return_value = [
+            ("Relevant document", 0.95),
+            ("Another document", 0.80),
+        ]
+
+        service = KnowledgeRetrievalService(
+            embedding_service=embedding_service,
+            vector_store=vector_store,
+        )
+
+        results = service.retrieve(
+            "test query",
+            top_k=2,
+        )
+
+        self.assertEqual(
+            results,
+            [
+                ("Relevant document", 0.95),
+                ("Another document", 0.80),
+            ],
+        )
+
+        vector_store.search.assert_called_once_with(
+            [1.0, 2.0, 3.0],
+            top_k=2,
+        )        

@@ -50,3 +50,36 @@ class RAGContextBuilderTests(SimpleTestCase):
         result = self.builder.build([])
 
         self.assertEqual(result, "")
+
+    def test_build_ignores_empty_content(self):
+        results = [
+            ("First useful document", 0.95),
+            ("", 0.90),
+            ("  ", 0.85),
+            ("Second useful document", 0.80),
+        ]    
+
+        context = RAGContextBuilder().build(results)
+
+        self.assertEqual(
+            context,
+            "First useful document\n\nSecond useful document",
+        )
+
+    def test_build_preserves_result_order(self):
+        results = [
+            ("Most relevant document", 0.99),
+            ("Second relevant document", 0.85),
+            ("Third relevant document", 0.70),
+        ]    
+
+        context = RAGContextBuilder().build(results)
+
+        self.assertEqual(
+            context,
+            "Most relevant document\n\n"
+            "Second relevant document\n\n"
+            "Third relevant document",
+        )
+
+    

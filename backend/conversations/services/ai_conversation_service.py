@@ -1,14 +1,15 @@
 from ai.providers.factory import get_ai_provider
 from ai.services.ai_service import AIService
 from decouple import config
+
+from ai.prompts.conversation import CONVERSATION_SYSTEM_PROMPT
+from conversations.models import Conversation, Message
 from knowledge.services.context import RAGContextBuilder
+from knowledge.services.embeddings.mock import MockEmbeddingService
 from knowledge.services.rag import RAGService
 from knowledge.services.retrieval import KnowledgeRetrievalService
-from knowledge.services.embeddings.mock import MockEmbeddingService
 from knowledge.services.vector_store.mock import MockVectorStore
 
-from conversations.models import Conversation, Message
-from ai.prompts.conversation import CONVERSATION_SYSTEM_PROMPT
 
 class AIConversationService:
     """
@@ -16,17 +17,32 @@ class AIConversationService:
     within a conversation.
     """
 
-    def __init__(self, provider_name=None):
+    def __init__(
+        self,
+        provider_name=None,
+        rag_service=None,
+        embedding_service=None,
+        vector_store=None,
+    ):
         provider = get_ai_provider(provider_name)
         self.ai_service = AIService(provider)
 
-        self.rag_service = RAGService(
-            retrieval_service=KnowledgeRetrievalService(
-                embedding_service=MockEmbeddingService(),
-                vector_store=MockVectorStore(),
-            ),
-            context_builder=RAGContextBuilder(),
-        )
+        if rag_service is None:
+            if embedding_service is None:
+                embedding_service = MockEmbeddingService()
+
+            if vector_store is None:
+                vector_store = MockVectorStore()
+
+            rag_service = RAGService(
+                retrieval_service=KnowledgeRetrievalService(
+                    embedding_service=embedding_service,
+                    vector_store=vector_store,
+                ),
+                context_builder=RAGContextBuilder(),
+            )
+
+        self.rag_service = rag_service
 
         self.memory_message_limit = config(
             "AI_MEMORY_MESSAGE_LIMIT",
@@ -61,7 +77,7 @@ class AIConversationService:
 
         conversation_messages = list(
             conversation_messages[: self.memory_message_limit]
-        )    
+        )
 
         conversation_messages.reverse()
 
@@ -81,7 +97,7 @@ class AIConversationService:
                 }
             )
 
-        return messages    
+        return messages
 
     def generate_response(
         self,
@@ -110,7 +126,7 @@ class AIConversationService:
 
         if rag_context:
             prompt = (
-                f"Use the following knowledge context to help answer the user.\n\n"
+                "Use the following knowledge context to help answer the user.\n\n"
                 f"Knowledge context:\n{rag_context}\n\n"
                 f"User question:\n{user_message.content}"
             )
@@ -131,9 +147,9 @@ class AIConversationService:
         )
 
     def generate_stream(
-            self,
-            conversation: Conversation,
-            user_message: Message,
+        self,
+        conversation: Conversation,
+        user_message: Message,
     ):
         """
         Generate an AI response as a stream of text chunks
@@ -164,4 +180,4 @@ class AIConversationService:
                 conversation=conversation,
                 sender_type=Message.SENDER_ASSISTANT,
                 content=response_text,
-            )    
+            )
