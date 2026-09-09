@@ -1,6 +1,11 @@
 from ai.providers.factory import get_ai_provider
 from ai.services.ai_service import AIService
 from decouple import config
+from knowledge.services.context import RAGContextBuilder
+from knowledge.services.rag import RAGService
+from knowledge.services.retrieval import KnowledgeRetrievalService
+from knowledge.services.embeddings.mock import MockEmbeddingService
+from knowledge.services.vector_store.mock import MockVectorStore
 
 from conversations.models import Conversation, Message
 from ai.prompts.conversation import CONVERSATION_SYSTEM_PROMPT
@@ -14,6 +19,14 @@ class AIConversationService:
     def __init__(self, provider_name=None):
         provider = get_ai_provider(provider_name)
         self.ai_service = AIService(provider)
+
+        self.rag_service = RAGService(
+            retrieval_service=KnowledgeRetrievalService(
+                embedding_service=MockEmbeddingService(),
+                vector_store=MockVectorStore(),
+            ),
+            context_builder=RAGContextBuilder(),
+        )
 
         self.memory_message_limit = config(
             "AI_MEMORY_MESSAGE_LIMIT",
@@ -74,6 +87,9 @@ class AIConversationService:
         self,
         conversation: Conversation,
         user_message: Message,
+        *,
+        rag_context: str | None = None,
+        rag_top_k: int = 5,
     ) -> Message:
         """
         Generate an AI response using the conversation history.
@@ -84,8 +100,23 @@ class AIConversationService:
             exclude_message_id=user_message.id,
         )
 
+        if rag_context is None:
+            rag_context = self.rag_service.build_context(
+                user_message.content,
+                top_k=rag_top_k,
+            )
+
+        prompt = user_message.content
+
+        if rag_context:
+            prompt = (
+                f"Use the following knowledge context to help answer the user.\n\n"
+                f"Knowledge context:\n{rag_context}\n\n"
+                f"User question:\n{user_message.content}"
+            )
+
         response_text = self.ai_service.generate_response(
-            user_message.content,
+            prompt,
             system_prompt=CONVERSATION_SYSTEM_PROMPT,
             messages=messages,
         )
