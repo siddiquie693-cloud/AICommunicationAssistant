@@ -2,6 +2,8 @@ from ai.providers.factory import get_ai_provider
 from ai.services.ai_service import AIService
 from decouple import config
 
+from ai.translation.factory import get_translation_service
+from ai.translation.service import TranslationService
 from ai.prompts.conversation import CONVERSATION_SYSTEM_PROMPT
 from conversations.models import Conversation, Message
 from knowledge.services.context import RAGContextBuilder
@@ -23,6 +25,7 @@ class AIConversationService:
         rag_service=None,
         embedding_service=None,
         vector_store=None,
+        translation_service=None,
     ):
         provider = get_ai_provider(provider_name)
         self.ai_service = AIService(provider)
@@ -43,6 +46,11 @@ class AIConversationService:
             )
 
         self.rag_service = rag_service
+
+        if translation_service is None:
+            translation_service = get_translation_service()
+
+        self.translation_service = translation_service    
 
         self.memory_message_limit = config(
             "AI_MEMORY_MESSAGE_LIMIT",
@@ -106,6 +114,7 @@ class AIConversationService:
         *,
         rag_context: str | None = None,
         rag_top_k: int = 5,
+        target_language: str | None = None,
     ) -> Message:
         """
         Generate an AI response using the conversation history.
@@ -137,6 +146,12 @@ class AIConversationService:
             messages=messages,
         )
 
+        if target_language:
+            response_text = self.translate_text(
+                response_text,
+                target_language=target_language,
+            )
+
         if not response_text or not response_text.strip():
             raise ValueError("AI response cannot be empty.")
 
@@ -144,6 +159,22 @@ class AIConversationService:
             conversation=conversation,
             sender_type=Message.SENDER_ASSISTANT,
             content=response_text,
+        )
+
+    def translate_text(
+        self,
+        text: str,
+        *,
+        source_language: str | None = None,
+        target_language: str,
+    ) -> str:
+        """
+        Translate text using the configured translation service.
+        """
+        return self.translation_service.translate(
+            text,
+            source_language=source_language,
+            target_language=target_language,
         )
 
     def generate_stream(

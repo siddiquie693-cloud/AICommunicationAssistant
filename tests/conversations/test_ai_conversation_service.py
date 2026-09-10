@@ -449,5 +449,109 @@ class AIConversationServiceTests(TestCase):
             ).exists()
         )
 
+    def test_translate_text(self):
+        service = AIConversationService()
+
+        result = service.translate_text(
+            "Hello",
+            source_language="en",
+            target_language="fr",
+        )    
+
+        self.assertEqual(
+            result,
+            "[fr] Hello",
+        )
+
+    def test_custom_translation_service_is_used(self):
+        class FakeTranslationService:
+            def translate(
+                self,
+                text,
+                *,
+                source_language=None,
+                target_language,
+            ):
+                return "custom translation"
+
+        translation_service = FakeTranslationService()
+
+        service = AIConversationService(
+            translation_service=translation_service,
+        )        
+
+        result = service.translate_text(
+            "Hello",
+            source_language="en",
+            target_language="fr",
+        )
+
+        self.assertEqual(
+            result,
+            "custom translation",
+        )
+
+    def test_generate_response_with_target_language(self):
+        conversation = Conversation.objects.create(
+            user=self.user,
+            title="Translation Test",
+        )
+
+        user_message = Message.objects.create(
+            conversation=conversation,
+            sender_type=Message.SENDER_USER,
+            content="Hello",
+        )
+
+        service = AIConversationService()
+
+        result = service.generate_response(
+            conversation,
+            user_message,
+            target_language="fr",
+        )
+
+        self.assertEqual(
+            result.content,
+            "[fr] Mock AI response: Hello",
+        )  
+
+    def test_generate_response_uses_custom_translation_service(self):
+        class FakeTranslationService:
+            def translate(
+                self,
+                text,
+                *,
+                source_language=None,
+                target_language,
+            ):
+                return "custom translated response"
+
+        conversation = Conversation.objects.create(
+            user=self.user,
+            title="Translation DI Test",
+        )
+
+        user_message = Message.objects.create(
+            conversation=conversation,
+            sender_type=Message.SENDER_USER,
+            content="Hello",
+        )
+
+        service = AIConversationService(
+            translation_service=FakeTranslationService(),
+        )
+
+        result = service.generate_response(
+            conversation,
+            user_message,
+            target_language="fr",
+        )
+
+        self.assertEqual(
+            result.content,
+            "custom translated response",
+        )      
+
 
 

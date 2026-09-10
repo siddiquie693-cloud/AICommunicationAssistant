@@ -3,7 +3,9 @@ from rest_framework import generics
 from rest_framework.permissions import IsAuthenticated
 from django.shortcuts import get_object_or_404
 from ai.providers.exceptions import AIProviderError
+from ai.translation.exceptions import TranslationProviderError
 
+from .translation_serializers import TranslationSerializer
 from .models import Conversation, Message
 from django.utils import timezone
 from rest_framework.response import Response
@@ -306,5 +308,45 @@ class MessageReadAPIView(generics.GenericAPIView):
 
         return Response(
             serializer.data,
+            status=status.HTTP_200_OK,
+        )
+
+class TranslationAPIView(generics.GenericAPIView):
+    serializer_class = TranslationSerializer
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, *args, **kwargs):
+        serializer = self.get_serializer(
+            data=request.data
+        )
+        serializer.is_valid(raise_exception=True)
+
+        translation_service = AIConversationService()
+
+        try:
+            translated_text = translation_service.translate_text(
+                serializer.validated_data["text"],
+                source_language=serializer.validated_data.get(
+                    "source_language"
+                ),
+                target_language=serializer.validated_data[
+                    "target_language"
+                ],
+            )
+        except TranslationProviderError:
+            return Response(
+                {
+                    "error": {
+                        "code": "translation_provider_error",
+                        "message": "Translation service is currently unavailable.",
+                    }
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+        return Response(
+            {
+                "translated_text": translated_text,
+            },
             status=status.HTTP_200_OK,
         )
