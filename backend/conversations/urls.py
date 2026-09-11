@@ -11,6 +11,7 @@ from .views import (
     MessageReadAPIView,
     TranslationAPIView,
     SpeechToTextAPIView,
+    TextToSpeechAPIView,
 )
 
 urlpatterns = [
@@ -32,6 +33,11 @@ urlpatterns = [
         "speech-to-text/",
         SpeechToTextAPIView.as_view(),
         name="speech-to-text",
+    ),
+    path(
+        "text-to-speech/",
+        TextToSpeechAPIView.as_view(),
+        name="text-to-speech",
     ),
     path("<int:pk>/",
         ConversationDetailAPIView.as_view(),

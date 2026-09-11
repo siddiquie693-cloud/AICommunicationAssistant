@@ -1,12 +1,15 @@
 from ai.providers.factory import get_ai_provider
 from ai.services.ai_service import AIService
 from decouple import config
+
 from ai.speech_to_text.factory import get_speech_to_text_service
 from ai.speech_to_text.service import SpeechToTextService
-
+from ai.text_to_speech.factory import get_text_to_speech_service
+from ai.text_to_speech.service import TextToSpeechService
 from ai.translation.factory import get_translation_service
 from ai.translation.service import TranslationService
 from ai.prompts.conversation import CONVERSATION_SYSTEM_PROMPT
+
 from conversations.models import Conversation, Message
 from knowledge.services.context import RAGContextBuilder
 from knowledge.services.embeddings.mock import MockEmbeddingService
@@ -29,6 +32,7 @@ class AIConversationService:
         vector_store=None,
         translation_service=None,
         speech_to_text_service=None,
+        text_to_speech_service=None,
     ):
         provider = get_ai_provider(provider_name)
         self.ai_service = AIService(provider)
@@ -58,7 +62,11 @@ class AIConversationService:
         if speech_to_text_service is None:
             speech_to_text_service = get_speech_to_text_service()
 
-        self.speech_to_text_service = speech_to_text_service      
+        self.speech_to_text_service = speech_to_text_service  
+
+        if text_to_speech_service is None:
+            text_to_speech_service = get_text_to_speech_service()
+        self.text_to_speech_service = text_to_speech_service        
 
         self.memory_message_limit = config(
             "AI_MEMORY_MESSAGE_LIMIT",
@@ -197,6 +205,22 @@ class AIConversationService:
         return self.speech_to_text_service.transcribe(
             audio,
             language=language,
+        )
+
+    def synthesize_speech(
+        self,
+        text: str,
+        *,
+        language: str | None = None,
+        voice: str | None = None,
+    ):
+        """
+        Convert text to speech using the configured text-to-speech service.
+        """
+        return self.text_to_speech_service.synthesize(
+            text,
+            language=language,
+            voice=voice,
         )
 
     def generate_stream(

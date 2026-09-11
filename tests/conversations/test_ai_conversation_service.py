@@ -591,5 +591,17 @@ class AIConversationServiceTests(TestCase):
             "custom transcription",
         )       
 
+    def test_synthesize_speech(self):
+        result = self.service.synthesize_speech(
+            "Hello world",
+            language="en",
+            voice="default",
+        )    
+
+        self.assertEqual(
+            result,
+            b"Mock audio data",
+        )
+
 
 

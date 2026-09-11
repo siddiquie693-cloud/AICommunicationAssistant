@@ -6,6 +6,8 @@ from ai.providers.exceptions import AIProviderError
 from ai.translation.exceptions import TranslationProviderError
 from .speech_to_text_serializers import SpeechToTextSerializer
 from ai.speech_to_text.exceptions import SpeechToTextProviderError
+from ai.text_to_speech.exceptions import TextToSpeechProviderError
+from .text_to_speech_serializers import TextToSpeechSerializer
 
 from .translation_serializers import TranslationSerializer
 from .models import Conversation, Message
@@ -390,4 +392,46 @@ class SpeechToTextAPIView(generics.GenericAPIView):
                 "transcribed_text": transcribed_text,
             },
             status=status.HTTP_200_OK,
-        )    
+        )   
+
+class TextToSpeechAPIView(generics.GenericAPIView):
+    serializer_class = TextToSpeechSerializer
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, *args, **kwargs):
+        serializer = self.get_serializer(
+            data=request.data
+        )
+        serializer.is_valid(raise_exception=True)
+
+        text_to_speech_service = AIConversationService()
+
+        try:
+            audio_data = (
+                text_to_speech_service.synthesize_speech(
+                    serializer.validated_data["text"],
+                    language=serializer.validated_data.get(
+                        "language"
+                    ),
+                    voice=serializer.validated_data.get(
+                        "voice"
+                    ),
+                )
+            )
+        except TextToSpeechProviderError:
+            return Response(
+                {
+                    "error": {
+                        "code": "text_to_speech_provider_error",
+                        "message": "Text-to-speech service is currently unavailable.",
+                    }
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+        return Response(
+            {
+                "audio": audio_data,
+            },
+            status=status.HTTP_200_OK,
+        )     
