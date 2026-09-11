@@ -4,6 +4,8 @@ from rest_framework.permissions import IsAuthenticated
 from django.shortcuts import get_object_or_404
 from ai.providers.exceptions import AIProviderError
 from ai.translation.exceptions import TranslationProviderError
+from .speech_to_text_serializers import SpeechToTextSerializer
+from ai.speech_to_text.exceptions import SpeechToTextProviderError
 
 from .translation_serializers import TranslationSerializer
 from .models import Conversation, Message
@@ -350,3 +352,42 @@ class TranslationAPIView(generics.GenericAPIView):
             },
             status=status.HTTP_200_OK,
         )
+
+class SpeechToTextAPIView(generics.GenericAPIView):
+    serializer_class = SpeechToTextSerializer
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, *args, **kwargs):
+        serializer = self.get_serializer(
+            data=request.data
+        )
+        serializer.is_valid(raise_exception=True)
+
+        speech_to_text_service = AIConversationService()
+
+        try:
+            transcribed_text = (
+                speech_to_text_service.transcribe_audio(
+                    serializer.validated_data["audio"],
+                    language=serializer.validated_data.get(
+                        "language"
+                    ),
+                )
+            )
+        except SpeechToTextProviderError:
+            return Response(
+                {
+                    "error": {
+                        "code": "speech_to_text_provider_error",
+                        "message": "Speech-to-text service is currently unavailable.",
+                    }
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )    
+
+        return Response(
+            {
+                "transcribed_text": transcribed_text,
+            },
+            status=status.HTTP_200_OK,
+        )    

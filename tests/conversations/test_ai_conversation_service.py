@@ -551,7 +551,45 @@ class AIConversationServiceTests(TestCase):
         self.assertEqual(
             result.content,
             "custom translated response",
-        )      
+        )   
+
+    def test_transcribe_audio(self):
+        service = AIConversationService()
+
+        result = service.transcribe_audio(
+            b"audio-data",
+            language="en",
+        )
+
+        self.assertEqual(
+            result,
+            "Mock transcription",
+        )
+
+
+    def test_custom_speech_to_text_service_is_used(self):
+        class FakeSpeechToTextService:
+            def transcribe(
+                self,
+                audio,
+                *,
+                language=None,
+            ):
+                return "custom transcription"
+
+        service = AIConversationService(
+            speech_to_text_service=FakeSpeechToTextService(),
+        )
+
+        result = service.transcribe_audio(
+            b"audio-data",
+            language="en",
+        )
+
+        self.assertEqual(
+            result,
+            "custom transcription",
+        )       
 
 
 

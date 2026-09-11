@@ -1,6 +1,8 @@
 from ai.providers.factory import get_ai_provider
 from ai.services.ai_service import AIService
 from decouple import config
+from ai.speech_to_text.factory import get_speech_to_text_service
+from ai.speech_to_text.service import SpeechToTextService
 
 from ai.translation.factory import get_translation_service
 from ai.translation.service import TranslationService
@@ -26,6 +28,7 @@ class AIConversationService:
         embedding_service=None,
         vector_store=None,
         translation_service=None,
+        speech_to_text_service=None,
     ):
         provider = get_ai_provider(provider_name)
         self.ai_service = AIService(provider)
@@ -50,7 +53,12 @@ class AIConversationService:
         if translation_service is None:
             translation_service = get_translation_service()
 
-        self.translation_service = translation_service    
+        self.translation_service = translation_service  
+
+        if speech_to_text_service is None:
+            speech_to_text_service = get_speech_to_text_service()
+
+        self.speech_to_text_service = speech_to_text_service      
 
         self.memory_message_limit = config(
             "AI_MEMORY_MESSAGE_LIMIT",
@@ -175,6 +183,20 @@ class AIConversationService:
             text,
             source_language=source_language,
             target_language=target_language,
+        )
+
+    def transcribe_audio(
+        self,
+        audio,
+        *,
+        language: str | None = None,
+    ) -> str:
+        """
+        Transcribe audio using the configured speech-to-text service.
+        """
+        return self.speech_to_text_service.transcribe(
+            audio,
+            language=language,
         )
 
     def generate_stream(
