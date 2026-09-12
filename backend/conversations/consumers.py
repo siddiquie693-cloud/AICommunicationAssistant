@@ -96,9 +96,12 @@ class ConversationConsumer(AsyncJsonWebsocketConsumer):
             self.group_name,
             {
                 "type": "user_message",
+                "event": "user_message",
                 "message_id": user_message.id,
                 "conversation_id": int(conversation_id),
                 "message": user_message.content,
+                "sender_type": user_message.sender_type,
+                "created_at": user_message.created_at.isoformat(),
             }
         )
 
@@ -121,10 +124,12 @@ class ConversationConsumer(AsyncJsonWebsocketConsumer):
             self.group_name,
             {
                 "type": "assistant_message",
+                "event": "assistant_message",
                 "message_id": assistant_message.id,
                 "conversation_id": int(conversation_id),
-                "message": user_message.content,
                 "response": assistant_message.content,
+                "sender_type": assistant_message.sender_type,
+                "created_at": assistant_message.created_at.isoformat(),
             }
         )
 
@@ -132,9 +137,12 @@ class ConversationConsumer(AsyncJsonWebsocketConsumer):
         await self.send_json(
             {
                 "type": "user_message",
+                "event": event["event"],
                 "message_id": event["message_id"],
                 "conversation_id": event["conversation_id"],
                 "message": event["message"],
+                "sender_type": event["sender_type"],
+                "created_at": event["created_at"],
             }
         )
 
@@ -142,8 +150,11 @@ class ConversationConsumer(AsyncJsonWebsocketConsumer):
         await self.send_json(
             {
                 "type": "assistant_message",
+                "event": event["event"],
                 "message_id": event["message_id"],
                 "conversation_id": event["conversation_id"],
                 "response": event["response"],
+                "sender_type": event["sender_type"],
+                "created_at": event["created_at"],
             }
         )
