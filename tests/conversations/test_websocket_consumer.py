@@ -73,36 +73,48 @@ class ConversationConsumerTests(TransactionTestCase):
             }
         )
 
-        response = await communicator.receive_json_from()
+        user_response = await communicator.receive_json_from()
 
         self.assertEqual(
-            response["type"],
-            "message_recevied",
+            user_response["type"],
+            "user_message",
         )
 
         self.assertEqual(
-            response["conversation_id"],
+            user_response["conversation_id"],
             conversation_id,
         )
 
         self.assertEqual(
-            response["message"],
+            user_response["message"],
             "Hello",
         )
 
+        assistant_response = await communicator.receive_json_from()
+
+        self.assertEqual(
+            assistant_response["type"],
+            "assistant_message",
+        )
+
+        self.assertEqual(
+            assistant_response["conversation_id"],
+            conversation_id,
+        )
+
         message_exists = await self._message_exists(
-            response["message_id"],
+            user_response["message_id"],
             conversation_id,
         )
 
         self.assertTrue(message_exists)
 
-        assistant_message_exists = await self._assistant_message_exists(
-            response["conversation_id"],
-            response["response"],
+        self._assistant_message_exists = await self._assistant_message_exists(
+            conversation_id,
+            assistant_response["response"],
         )
 
-        self.assertTrue(assistant_message_exists)
+        self.assertTrue(self._assistant_message_exists)
 
         await communicator.disconnect()
 
