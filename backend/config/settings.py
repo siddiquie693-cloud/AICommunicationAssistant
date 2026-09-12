@@ -58,6 +58,7 @@ INSTALLED_APPS = [
     "rest_framework_simplejwt.token_blacklist",
     "conversations",
     "knowledge",
+    "channels",
 ]
 
 AUTH_USER_MODEL = "users.User"
@@ -95,7 +96,7 @@ TEMPLATES = [
 ]
 
 WSGI_APPLICATION = "config.wsgi.application"
-
+ASGI_APPLICATION = "config.asgi.application"
 
 # Database
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
