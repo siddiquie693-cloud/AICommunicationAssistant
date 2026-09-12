@@ -107,12 +107,24 @@ class ConversationConsumer(AsyncJsonWebsocketConsumer):
             )    
             return 
 
-        await self.send_json(
+        await self.channel_layer.group_send(
+            self.group_name,
             {
-                "type": "message_recevied",
+                "type": "conversation_message",
                 "message_id": user_message.id,
                 "conversation_id": int(conversation_id),
                 "message": user_message.content,
                 "response": assistant_message.content,
             }
         )
+
+    async def conversation_message(self, event):
+        await self.send_json(
+            {
+                "type": "message_recevied",
+                "message_id": event["message_id"],
+                "conversation_id": event["conversation_id"],
+                "message": event["message"],
+                "response": event["response"],
+            }
+        )    
