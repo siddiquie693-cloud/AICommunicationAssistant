@@ -83,6 +83,16 @@ class ConversationConsumer(AsyncJsonWebsocketConsumer):
             )
             return
 
+        if len(message) > 10000:
+            await self.send_json(
+                {
+                    "type": "error",
+                    "code": "message_too_long",
+                    "message": "Message exceeds the maximum allowed length.",
+                }
+            )
+            return
+
         conversation_id = self.scope["url_route"]["kwargs"].get(
             "conversation_id"
         )
