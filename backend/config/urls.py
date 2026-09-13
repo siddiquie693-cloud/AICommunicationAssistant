@@ -16,6 +16,8 @@ Including another URLconf
 """
 from django.contrib import admin
 from django.urls import path, include
+from conversations.whatsapp_views import WhatsAppWebhookAPIView
+
 from drf_spectacular.views import (
     SpectacularAPIView,
     SpectacularRedocView,
@@ -30,4 +32,9 @@ urlpatterns = [
     path("api/", include("core.urls")),
     path("api/auth/", include("users.urls")),
     path("api/conversations/", include("conversations.urls"),),
+    path(
+    "api/whatsapp/webhook/",
+    WhatsAppWebhookAPIView.as_view(),
+    name="whatsapp-webhook",
+),
 ]

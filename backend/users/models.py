@@ -7,6 +7,13 @@ from django.utils import timezone
 class User(AbstractUser):
     email = models.EmailField(unique=True)
 
+    whatsapp_phone_number = models.CharField(
+        max_length=20,
+        unique=True,
+        null=True,
+        blank=True,
+    )
+
     email_verified = models.BooleanField(default=False,)
 
     email_verified_at = models.DateTimeField(
