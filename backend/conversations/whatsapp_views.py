@@ -9,7 +9,9 @@ from ai.whatsapp.exceptions import (
 )
 from ai.whatsapp.factory import get_whatsapp_provider
 from ai.whatsapp.service import WhatsAppService
-
+from conversations.services.whatsapp_conversation_service import (
+    WhatsAppConversationService,
+)
 
 class WhatsAppWebhookAPIView(APIView):
     """
@@ -89,6 +91,29 @@ class WhatsAppWebhookAPIView(APIView):
                 request.data,
             )
 
+            if not payload:
+                return Response(
+                    {
+                        "success": True,
+                        "payload": {},
+                    },
+                    status=status.HTTP_200_OK,
+                )
+
+            conversation_service = WhatsAppConversationService(
+                whatsapp_service,
+            )
+
+            user = conversation_service.get_user_by_whatsapp_number(
+                payload["sender"],
+            )
+
+            result = conversation_service.process_message(
+                user,
+                payload["sender"],
+                payload["message"],
+            )
+
         except ValueError as exc:
             return Response(
                 {
@@ -114,7 +139,12 @@ class WhatsAppWebhookAPIView(APIView):
         return Response(
             {
                 "success": True,
-                "payload": payload,
+                "payload": {
+                    "message_id": payload["message_id"],
+                    "conversation_id": result["conversation"].id,
+                    "user_message_id": result["user_message"].id,
+                    "assistant_message_id": result["assistant_message"].id,
+                },
             },
             status=status.HTTP_200_OK,
         )
