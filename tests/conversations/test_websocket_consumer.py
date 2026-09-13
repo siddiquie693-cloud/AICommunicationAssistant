@@ -6,11 +6,12 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from conversations.models import Conversation, Message
 
 from ai.services.ai_service import AIService
+import base64
 
 from config.asgi import application
 from users.models import User
 from django.utils import timezone
-from unittest.mock import patch, AsyncMock
+from unittest.mock import patch, AsyncMock, ANY, MagicMock
 
 class ConversationConsumerTests(TransactionTestCase):
 
@@ -1907,8 +1908,7 @@ class ConversationConsumerTests(TransactionTestCase):
         )(
             access_token,
             conversation.id,
-        )
-
+        )  
 
     async def _test_ai_failure_does_not_disconnect_websocket_connection(
         self,
@@ -2050,4 +2050,1118 @@ class ConversationConsumerTests(TransactionTestCase):
                 communicator.scope["user"].is_authenticated
             )
 
-        await communicator.disconnect()         
+        await communicator.disconnect() 
+
+    def test_voice_message_returns_voice_response(self):
+        user_id, access_token = self._create_test_user(
+            "voice_websocket_user",
+            "voicewebsocket@example.com",
+        )
+
+        conversation = Conversation.objects.create(
+            user_id=user_id,
+            title="Voice WebSocket Conversation",
+        )
+
+        async_to_sync(
+            self._test_voice_message_returns_voice_response
+        )(
+            access_token,
+            conversation.id,
+        )
+
+    async def _test_voice_message_returns_voice_response(
+        self,
+        access_token,
+        conversation_id,
+    ):
+        communicator = WebsocketCommunicator(
+            application,
+            f"/ws/conversations/{conversation_id}/?token={access_token}",
+        )
+
+        connected, _ = await communicator.connect()
+
+        self.assertTrue(connected)
+
+        audio_data = b"test audio data"
+
+        encoded_audio = base64.b64encode(
+            audio_data
+        ).decode("ascii")
+
+        voice_result = {
+            "transcript": "Hello",
+            "user_message": await database_sync_to_async(
+                Message.objects.create
+            )(
+                conversation_id=conversation_id,
+                sender_type=Message.SENDER_USER,
+                content="Hello",
+            ),
+            "assistant_message": await database_sync_to_async(
+                Message.objects.create
+            )(
+                conversation_id=conversation_id,
+                sender_type=Message.SENDER_ASSISTANT,
+                content="Hello! How can I help you?",
+            ),
+            "audio": b"Mock audio data",
+        }
+
+        with patch(
+            "conversations.consumers.process_voice_message",
+            return_value=voice_result,
+        ) as mock_process_voice_message:
+
+            await communicator.send_json_to(
+                {
+                    "type": "voice_message",
+                    "audio": encoded_audio,
+                    "input_language": "en",
+                    "target_language": "en",
+                    "voice": "default",
+                }
+            )
+
+            response = await communicator.receive_json_from()
+
+        self.assertEqual(
+            response["type"],
+            "voice_message",
+        )
+
+        self.assertEqual(
+            response["conversation_id"],
+            conversation_id,
+        )
+
+        self.assertEqual(
+            response["transcript"],
+            "Hello",
+        )
+
+        self.assertEqual(
+            response["response"],
+            "Hello! How can I help you?",
+        )
+
+        self.assertEqual(
+            response["audio"],
+            base64.b64encode(
+                b"Mock audio data"
+            ).decode("ascii"),
+        )
+
+        mock_process_voice_message.assert_called_once()
+
+        await communicator.disconnect()
+
+    def test_voice_message_passes_decoded_audio_and_options(self):
+        user_id, access_token = self._create_test_user(
+            "voice_options_websocket_user",
+            "voiceoptionswebsocket@example.com",
+        )
+
+        conversation = Conversation.objects.create(
+            user_id=user_id,
+            title="Voice Options WebSocket Conversation",
+        )
+
+        async_to_sync(
+            self._test_voice_message_passes_decoded_audio_and_options
+        )(
+            access_token,
+            conversation.id,
+        )
+
+    async def _test_voice_message_passes_decoded_audio_and_options(
+        self,
+        access_token,
+        conversation_id,
+    ):
+        communicator = WebsocketCommunicator(
+            application,
+            f"/ws/conversations/{conversation_id}/?token={access_token}",
+        )
+
+        connected, _ = await communicator.connect()
+
+        self.assertTrue(connected)
+
+        audio_data = b"decoded voice audio"
+
+        encoded_audio = base64.b64encode(
+            audio_data
+        ).decode("ascii")
+
+        voice_result = {
+            "transcript": "Hello",
+            "user_message": await database_sync_to_async(
+                Message.objects.create
+            )(
+                conversation_id=conversation_id,
+                sender_type=Message.SENDER_USER,
+                content="Hello",
+            ),
+            "assistant_message": await database_sync_to_async(
+                Message.objects.create
+            )(
+                conversation_id=conversation_id,
+                sender_type=Message.SENDER_ASSISTANT,
+                content="Hello!",
+            ),
+            "audio": b"Mock audio data",
+        }
+
+        with patch(
+            "conversations.consumers.process_voice_message",
+            return_value=voice_result,
+        ) as mock_process_voice_message:
+
+            await communicator.send_json_to(
+                {
+                    "type": "voice_message",
+                    "audio": encoded_audio,
+                    "input_language": "hi",
+                    "target_language": "en",
+                    "voice": "default",
+                }
+            )
+
+            response = await communicator.receive_json_from()
+
+        self.assertEqual(
+            response["type"],
+            "voice_message",
+        )
+
+        mock_process_voice_message.assert_called_once_with(
+            ANY,
+            audio_data,
+            input_language="hi",
+            target_language="en",
+            voice="default",
+        )
+
+        await communicator.disconnect() 
+
+    def test_voice_message_works_without_optional_parameters(self):
+        user_id, access_token = self._create_test_user(
+            "voice_defaults_user",
+            "voicedefaults@example.com",
+        )
+
+        conversation = Conversation.objects.create(
+            user_id=user_id,
+            title="Voice Defaults Conversation",
+        )
+
+        async_to_sync(
+            self._test_voice_message_works_without_optional_parameters
+        )(
+            access_token,
+            conversation.id,
+        )
+
+    async def _test_voice_message_works_without_optional_parameters(
+        self,
+        access_token,
+        conversation_id,
+    ):
+        communicator = WebsocketCommunicator(
+            application,
+            f"/ws/conversations/{conversation_id}/?token={access_token}",
+        )
+
+        connected, _ = await communicator.connect()
+
+        self.assertTrue(connected)
+
+        audio_data = b"default voice audio"
+
+        encoded_audio = base64.b64encode(
+            audio_data
+        ).decode("ascii")
+
+        voice_result = {
+            "transcript": "Hello",
+            "user_message": await database_sync_to_async(
+                Message.objects.create
+            )(
+                conversation_id=conversation_id,
+                sender_type=Message.SENDER_USER,
+                content="Hello",
+            ),
+            "assistant_message": await database_sync_to_async(
+                Message.objects.create
+            )(
+                conversation_id=conversation_id,
+                sender_type=Message.SENDER_ASSISTANT,
+                content="Hello!",
+            ),
+            "audio": b"Mock audio data",
+        }
+
+        with patch(
+            "conversations.consumers.process_voice_message",
+            return_value=voice_result,
+        ) as mock_process_voice_message:
+
+            await communicator.send_json_to(
+                {
+                    "type": "voice_message",
+                    "audio": encoded_audio,
+                }
+            )
+
+            response = await communicator.receive_json_from()
+
+        self.assertEqual(
+            response["type"],
+            "voice_message",
+        )
+
+        mock_process_voice_message.assert_called_once_with(
+            ANY,
+            audio_data,
+            input_language=None,
+            target_language=None,
+            voice=None,
+        )
+
+        await communicator.disconnect()       
+
+    def test_voice_message_rejects_empty_audio(self):
+        user_id, access_token = self._create_test_user(
+            "empty_voice_websocket_user",
+            "emptyvoicewebsocket@example.com",
+        )
+
+        conversation = Conversation.objects.create(
+            user_id=user_id,
+            title="Empty Voice WebSocket Conversation",
+        )
+
+        async_to_sync(
+            self._test_voice_message_rejects_empty_audio
+        )(
+            access_token,
+            conversation.id,
+        )
+
+    async def _test_voice_message_rejects_empty_audio(
+        self,
+        access_token,
+        conversation_id,
+    ):
+        communicator = WebsocketCommunicator(
+            application,
+            f"/ws/conversations/{conversation_id}/?token={access_token}",
+        )
+
+        connected, _ = await communicator.connect()
+
+        self.assertTrue(connected)
+
+        await communicator.send_json_to(
+            {
+                "type": "voice_message",
+                "audio": "",
+            }
+        )
+
+        response = await communicator.receive_json_from()
+
+        self.assertEqual(
+            response["type"],
+            "error",
+        )
+
+        self.assertEqual(
+            response["code"],
+            "invalid_audio",
+        )
+
+        self.assertEqual(
+            response["message"],
+            "Audio cannot be empty.",
+        )
+
+        await communicator.disconnect() 
+
+    def test_voice_message_rejects_missing_audio(self):
+        user_id, access_token = self._create_test_user(
+            "missing_voice_audio_user",
+            "missingvoiceaudio@example.com",
+        )
+
+        conversation = Conversation.objects.create(
+            user_id=user_id,
+            title="Missing Voice Audio Conversation",
+        )
+
+        async_to_sync(
+            self._test_voice_message_rejects_missing_audio
+        )(
+            access_token,
+            conversation.id,
+        )
+
+    async def _test_voice_message_rejects_missing_audio(
+        self,
+        access_token,
+        conversation_id,
+    ):
+        communicator = WebsocketCommunicator(
+            application,
+            f"/ws/conversations/{conversation_id}/?token={access_token}",
+        )
+
+        connected, _ = await communicator.connect()
+
+        self.assertTrue(connected)
+
+        await communicator.send_json_to(
+            {
+                "type": "voice_message",
+            }
+        )
+
+        response = await communicator.receive_json_from()
+
+        self.assertEqual(
+            response["type"],
+            "error",
+        )
+
+        self.assertEqual(
+            response["code"],
+            "invalid_audio",
+        )
+
+        self.assertEqual(
+            response["message"],
+            "Audio cannot be empty.",
+        )
+
+        await communicator.disconnect()
+
+    def test_voice_message_rejects_empty_decoded_audio(self):
+        user_id, access_token = self._create_test_user(
+            "empty_decoded_audio_user",
+            "emptydecodedaudio@example.com",
+        )
+
+        conversation = Conversation.objects.create(
+            user_id=user_id,
+            title="Empty Decoded Audio Conversation",
+        )
+
+        async_to_sync(
+            self._test_voice_message_rejects_empty_decoded_audio
+        )(
+            access_token,
+            conversation.id,
+        )
+
+    async def _test_voice_message_rejects_empty_decoded_audio(
+        self,
+        access_token,
+        conversation_id,
+    ):
+        communicator = WebsocketCommunicator(
+            application,
+            f"/ws/conversations/{conversation_id}/?token={access_token}",
+        )
+
+        connected, _ = await communicator.connect()
+
+        self.assertTrue(connected)
+
+        encoded_audio = base64.b64encode(
+            b""
+        ).decode("ascii")
+
+        await communicator.send_json_to(
+            {
+                "type": "voice_message",
+                "audio": encoded_audio,
+            }
+        )
+
+        response = await communicator.receive_json_from()
+
+        self.assertEqual(
+            response["type"],
+            "error",
+        )
+
+        self.assertEqual(
+            response["code"],
+            "invalid_audio",
+        )
+
+        self.assertEqual(
+            response["message"],
+            "Audio cannot be empty.",
+        )
+
+        await communicator.disconnect() 
+
+    def test_voice_message_rejects_missing_audio_response(self):
+        user_id, access_token = self._create_test_user(
+            "missing_audio_response_user",
+            "missingaudioresponse@example.com",
+        )
+
+        conversation = Conversation.objects.create(
+            user_id=user_id,
+            title="Missing Audio Response Conversation",
+        )
+
+        async_to_sync(
+            self._test_voice_message_rejects_missing_audio_response
+        )(
+            access_token,
+            conversation.id,
+        )
+
+    async def _test_voice_message_rejects_missing_audio_response(
+        self,
+        access_token,
+        conversation_id,
+    ):
+        communicator = WebsocketCommunicator(
+            application,
+            f"/ws/conversations/{conversation_id}/?token={access_token}",
+        )
+
+        connected, _ = await communicator.connect()
+
+        self.assertTrue(connected)
+
+        encoded_audio = base64.b64encode(
+            b"test audio data"
+        ).decode("ascii")
+
+        voice_result = {
+            "transcript": "Hello",
+            "user_message": await database_sync_to_async(
+                Message.objects.create
+            )(
+                conversation_id=conversation_id,
+                sender_type=Message.SENDER_USER,
+                content="Hello",
+            ),
+            "assistant_message": await database_sync_to_async(
+                Message.objects.create
+            )(
+                conversation_id=conversation_id,
+                sender_type=Message.SENDER_ASSISTANT,
+                content="Hello!",
+            ),
+        }
+
+        with patch(
+            "conversations.consumers.process_voice_message",
+            return_value=voice_result,
+        ):
+            await communicator.send_json_to(
+                {
+                    "type": "voice_message",
+                    "audio": encoded_audio,
+                }
+            )
+
+            response = await communicator.receive_json_from()
+
+        self.assertEqual(
+            response["type"],
+            "error",
+        )
+
+        self.assertEqual(
+            response["code"],
+            "voice_response_error",
+        )
+
+        self.assertEqual(
+            response["message"],
+            "Unable to process voice message.",
+        )
+
+        await communicator.disconnect() 
+
+    def test_voice_message_rejects_missing_transcript_response(self):
+        user_id, access_token = self._create_test_user(
+            "missing_transcript_response_user",
+            "missingtranscriptresponse@example.com",
+        )
+
+        conversation = Conversation.objects.create(
+            user_id=user_id,
+            title="Missing Transcript Response Conversation",
+        )
+
+        async_to_sync(
+            self._test_voice_message_rejects_missing_transcript_response
+        )(
+            access_token,
+            conversation.id,
+        )
+
+    async def _test_voice_message_rejects_missing_transcript_response(
+        self,
+        access_token,
+        conversation_id,
+    ):
+        communicator = WebsocketCommunicator(
+            application,
+            f"/ws/conversations/{conversation_id}/?token={access_token}",
+        )
+
+        connected, _ = await communicator.connect()
+
+        self.assertTrue(connected)
+
+        encoded_audio = base64.b64encode(
+            b"test audio data"
+        ).decode("ascii")
+
+        voice_result = {
+            "user_message": await database_sync_to_async(
+                Message.objects.create
+            )(
+                conversation_id=conversation_id,
+                sender_type=Message.SENDER_USER,
+                content="Hello",
+            ),
+            "assistant_message": await database_sync_to_async(
+                Message.objects.create
+            )(
+                conversation_id=conversation_id,
+                sender_type=Message.SENDER_ASSISTANT,
+                content="Hello!",
+            ),
+            "audio": b"Mock audio data",
+        }
+
+        with patch(
+            "conversations.consumers.process_voice_message",
+            return_value=voice_result,
+        ):
+            await communicator.send_json_to(
+                {
+                    "type": "voice_message",
+                    "audio": encoded_audio,
+                }
+            )
+
+            response = await communicator.receive_json_from()
+
+        self.assertEqual(
+            response["type"],
+            "error",
+        )
+
+        self.assertEqual(
+            response["code"],
+            "voice_response_error",
+        )
+
+        self.assertEqual(
+            response["message"],
+            "Unable to process voice message.",
+        )
+
+        await communicator.disconnect()
+
+    def test_voice_message_rejects_missing_assistant_message_response(self):
+        user_id, access_token = self._create_test_user(
+            "missing_assistant_response_user",
+            "missingassistantresponse@example.com",
+        )
+
+        conversation = Conversation.objects.create(
+            user_id=user_id,
+            title="Missing Assistant Response Conversation",
+        )
+
+        async_to_sync(
+            self._test_voice_message_rejects_missing_assistant_message_response
+        )(
+            access_token,
+            conversation.id,
+        )
+
+    async def _test_voice_message_rejects_missing_assistant_message_response(
+        self,
+        access_token,
+        conversation_id,
+    ):
+        communicator = WebsocketCommunicator(
+            application,
+            f"/ws/conversations/{conversation_id}/?token={access_token}",
+        )
+
+        connected, _ = await communicator.connect()
+
+        self.assertTrue(connected)
+
+        encoded_audio = base64.b64encode(
+            b"test audio data"
+        ).decode("ascii")
+
+        voice_result = {
+            "transcript": "Hello",
+            "audio": b"Mock audio data",
+        }
+
+        with patch(
+            "conversations.consumers.process_voice_message",
+            return_value=voice_result,
+        ):
+            await communicator.send_json_to(
+                {
+                    "type": "voice_message",
+                    "audio": encoded_audio,
+                }
+            )
+
+            response = await communicator.receive_json_from()
+
+        self.assertEqual(
+            response["type"],
+            "error",
+        )
+
+        self.assertEqual(
+            response["code"],
+            "voice_response_error",
+        )
+
+        self.assertEqual(
+            response["message"],
+            "Unable to process voice message.",
+        )
+
+        await communicator.disconnect() 
+
+    def test_voice_message_rejects_invalid_transcript_response(self):
+        user_id, access_token = self._create_test_user(
+            "invalid_transcript_response_user",
+            "invalidtranscriptresponse@example.com",
+        )
+
+        conversation = Conversation.objects.create(
+            user_id=user_id,
+            title="Invalid Transcript Response Conversation",
+        )
+
+        async_to_sync(
+            self._test_voice_message_rejects_invalid_transcript_response
+        )(
+            access_token,
+            conversation.id,
+        )
+
+    async def _test_voice_message_rejects_invalid_transcript_response(
+        self,
+        access_token,
+        conversation_id,
+    ):
+        communicator = WebsocketCommunicator(
+            application,
+            f"/ws/conversations/{conversation_id}/?token={access_token}",
+        )
+
+        connected, _ = await communicator.connect()
+
+        self.assertTrue(connected)
+
+        encoded_audio = base64.b64encode(
+            b"test audio data"
+        ).decode("ascii")
+
+        voice_result = {
+            "transcript": None,
+            "assistant_message": MagicMock(
+                content="AI voice response",
+            ),
+            "audio": b"Mock audio data",
+        }
+
+        with patch(
+            "conversations.consumers.process_voice_message",
+            return_value=voice_result,
+        ):
+            await communicator.send_json_to(
+                {
+                    "type": "voice_message",
+                    "audio": encoded_audio,
+                }
+            )
+
+            response = await communicator.receive_json_from()
+
+        self.assertEqual(
+            response["type"],
+            "error",
+        )
+
+        self.assertEqual(
+            response["code"],
+            "voice_response_error",
+        )
+
+        self.assertEqual(
+            response["message"],
+            "Unable to process voice message.",
+        )
+
+        await communicator.disconnect()
+
+    def test_voice_message_rejects_invalid_assistant_message_response(self):
+        user_id, access_token = self._create_test_user(
+            "invalid_assistant_response_user",
+            "invalidassistantresponse@example.com",
+        )
+
+        conversation = Conversation.objects.create(
+            user_id=user_id,
+            title="Invalid Assistant Response Conversation",
+        )
+
+        async_to_sync(
+            self._test_voice_message_rejects_invalid_assistant_message_response
+        )(
+            access_token,
+            conversation.id,
+        )
+
+    async def _test_voice_message_rejects_invalid_assistant_message_response(
+        self,
+        access_token,
+        conversation_id,
+    ):
+        communicator = WebsocketCommunicator(
+            application,
+            f"/ws/conversations/{conversation_id}/?token={access_token}",
+        )
+
+        connected, _ = await communicator.connect()
+
+        self.assertTrue(connected)
+
+        encoded_audio = base64.b64encode(
+            b"test audio data"
+        ).decode("ascii")
+
+        voice_result = {
+            "transcript": "Hello",
+            "assistant_message": None,
+            "audio": b"Mock audio data",
+        }
+
+        with patch(
+            "conversations.consumers.process_voice_message",
+            return_value=voice_result,
+        ):
+            await communicator.send_json_to(
+                {
+                    "type": "voice_message",
+                    "audio": encoded_audio,
+                }
+            )
+
+            response = await communicator.receive_json_from()
+
+        self.assertEqual(
+            response["type"],
+            "error",
+        )
+
+        self.assertEqual(
+            response["code"],
+            "voice_response_error",
+        )
+
+        self.assertEqual(
+            response["message"],
+            "Unable to process voice message.",
+        )
+
+        await communicator.disconnect()                        
+
+    def test_voice_message_rejects_invalid_audio(self):
+        user_id, access_token = self._create_test_user(
+            "invalid_voice_websocket_user",
+            "invalidvoicewebsocket@example.com",
+        )
+
+        conversation = Conversation.objects.create(
+            user_id=user_id,
+            title="Invalid Voice WebSocket Conversation",
+        )
+
+        async_to_sync(
+            self._test_voice_message_rejects_invalid_audio
+        )(
+            access_token,
+            conversation.id,
+        )
+
+    async def _test_voice_message_rejects_invalid_audio(
+        self,
+        access_token,
+        conversation_id,
+    ):
+        communicator = WebsocketCommunicator(
+            application,
+            f"/ws/conversations/{conversation_id}/?token={access_token}",
+        )
+
+        connected, _ = await communicator.connect()
+
+        self.assertTrue(connected)
+
+        await communicator.send_json_to(
+            {
+                "type": "voice_message",
+                "audio": "not-valid-base64-data",
+            }
+        )
+
+        response = await communicator.receive_json_from()
+
+        self.assertEqual(
+            response["type"],
+            "error",
+        )
+
+        self.assertEqual(
+            response["code"],
+            "invalid_audio",
+        )
+
+        self.assertEqual(
+            response["message"],
+            "Invalid audio data.",
+        )
+
+        await communicator.disconnect() 
+
+    def test_voice_message_rejects_non_string_audio(self):
+        user_id, access_token = self._create_test_user(
+            "non_string_voice_websocket_user",
+            "nonstringvoicewebsocket@example.com",
+        )
+
+        conversation = Conversation.objects.create(
+            user_id=user_id,
+            title="Non String Voice WebSocket Conversation",
+        )
+
+        async_to_sync(
+            self._test_voice_message_rejects_non_string_audio
+        )(
+            access_token,
+            conversation.id,
+        )
+
+    async def _test_voice_message_rejects_non_string_audio(
+        self,
+        access_token,
+        conversation_id,
+    ):
+        communicator = WebsocketCommunicator(
+            application,
+            f"/ws/conversations/{conversation_id}/?token={access_token}",
+        )
+
+        connected, _ = await communicator.connect()
+
+        self.assertTrue(connected)
+
+        await communicator.send_json_to(
+            {
+                "type": "voice_message",
+                "audio": 12345,
+            }
+        )
+
+        response = await communicator.receive_json_from()
+
+        self.assertEqual(
+            response["type"],
+            "error",
+        )
+
+        self.assertEqual(
+            response["code"],
+            "invalid_audio",
+        )
+
+        self.assertEqual(
+            response["message"],
+            "Audio cannot be empty.",
+        )
+
+        await communicator.disconnect()
+
+    def test_voice_message_returns_error_when_processing_fails(self):
+        user_id, access_token = self._create_test_user(
+            "voice_processing_error_user",
+            "voiceprocessingerror@example.com",
+        )
+
+        conversation = Conversation.objects.create(
+            user_id=user_id,
+            title="Voice Processing Error Conversation",
+        )
+
+        async_to_sync(
+            self._test_voice_message_returns_error_when_processing_fails
+        )(
+            access_token,
+            conversation.id,
+        )
+
+    async def _test_voice_message_returns_error_when_processing_fails(
+        self,
+        access_token,
+        conversation_id,
+    ):
+        communicator = WebsocketCommunicator(
+            application,
+            f"/ws/conversations/{conversation_id}/?token={access_token}",
+        )
+
+        connected, _ = await communicator.connect()
+
+        self.assertTrue(connected)
+
+        audio_data = base64.b64encode(
+            b"test audio data"
+        ).decode("ascii")
+
+        with patch(
+            "conversations.consumers.process_voice_message",
+            side_effect=Exception("Voice processing failed"),
+        ):
+            await communicator.send_json_to(
+                {
+                    "type": "voice_message",
+                    "audio": audio_data,
+                    "input_language": "en",
+                    "target_language": "en",
+                    "voice": "default",
+                }
+            )
+
+            response = await communicator.receive_json_from()
+
+        self.assertEqual(
+            response["type"],
+            "error",
+        )
+
+        self.assertEqual(
+            response["code"],
+            "voice_response_error",
+        )
+
+        self.assertEqual(
+            response["message"],
+            "Unable to process voice message.",
+        )
+
+        await communicator.disconnect()
+
+    def test_voice_message_rejects_invalid_audio_response(self):
+        user_id, access_token = self._create_test_user(
+            "invalid_audio_response_user",
+            "invalidaudioresponse@example.com",
+        )
+
+        conversation = Conversation.objects.create(
+            user_id=user_id,
+            title="Invalid Audio Response Conversation",
+        )
+
+        async_to_sync(
+            self._test_voice_message_rejects_invalid_audio_response
+        )(
+            access_token,
+            conversation.id,
+        )
+
+    async def _test_voice_message_rejects_invalid_audio_response(
+        self,
+        access_token,
+        conversation_id,
+    ):
+        communicator = WebsocketCommunicator(
+            application,
+            f"/ws/conversations/{conversation_id}/?token={access_token}",
+        )
+
+        connected, _ = await communicator.connect()
+
+        self.assertTrue(connected)
+
+        audio_data = base64.b64encode(
+            b"test audio data"
+        ).decode("ascii")
+
+        voice_result = {
+            "transcript": "Hello",
+            "user_message": await database_sync_to_async(
+                Message.objects.create
+            )(
+                conversation_id=conversation_id,
+                sender_type=Message.SENDER_USER,
+                content="Hello",
+            ),
+            "assistant_message": await database_sync_to_async(
+                Message.objects.create
+            )(
+                conversation_id=conversation_id,
+                sender_type=Message.SENDER_ASSISTANT,
+                content="Hello! How can I help you?",
+            ),
+            "audio": "invalid audio response",
+        }
+
+        with patch(
+            "conversations.consumers.process_voice_message",
+            return_value=voice_result,
+        ):
+            await communicator.send_json_to(
+                {
+                    "type": "voice_message",
+                    "audio": audio_data,
+                }
+            )
+
+            response = await communicator.receive_json_from()
+
+        self.assertEqual(
+            response["type"],
+            "error",
+        )
+
+        self.assertEqual(
+            response["code"],
+            "invalid_audio_response",
+        )
+
+        self.assertEqual(
+            response["message"],
+            "Invalid audio response.",
+        )
+
+        await communicator.disconnect()              
+
+              

@@ -3,6 +3,10 @@ from channels.generic.websocket import AsyncJsonWebsocketConsumer
 from ai.services.ai_service import AIService
 from .services.ai_conversation_service import AIConversationService
 from .models import Conversation, Message
+import base64
+from .services.voice_conversation_service import (
+    VoiceConversationService,
+)
 
 
 @database_sync_to_async
@@ -28,6 +32,24 @@ def generate_ai_response(conversation, user_message):
     return service.generate_response(
         conversation,
         user_message,
+    )
+
+@database_sync_to_async
+def process_voice_message(
+    conversation,
+    audio,
+    input_language=None,
+    target_language=None,
+    voice=None,
+):
+    service = VoiceConversationService()
+
+    return service.process_voice(
+        conversation,
+        audio,
+        input_language=input_language,
+        target_language=target_language,
+        voice=voice,
     )
 
 
@@ -71,77 +93,197 @@ class ConversationConsumer(AsyncJsonWebsocketConsumer):
             )
 
     async def receive_json(self, content, **kwargs):
-        message = content.get("message")
+            if content.get("type") == "voice_message":
+                await self.receive_voice_message(content)
+                return
+            message = content.get("message")
 
-        if not isinstance(message, str) or not message.strip():
+            if not isinstance(message, str) or not message.strip():
+                await self.send_json(
+                    {
+                        "type": "error",
+                        "code": "invalid_message",
+                        "message": "Message cannot be empty.",
+                    }
+                )
+                return
+
+            if len(message) > 10000:
+                await self.send_json(
+                    {
+                        "type": "error",
+                        "code": "message_too_long",
+                        "message": "Message exceeds the maximum allowed length.",
+                    }
+                )
+                return
+
+            conversation_id = self.scope["url_route"]["kwargs"].get(
+                "conversation_id"
+            )
+
+            user_message = await create_user_message(
+                self.conversation,
+                message.strip(),
+            )
+
+            await self.channel_layer.group_send(
+                self.group_name,
+                {
+                    "type": "user_message",
+                    "event": "user_message",
+                    "message_id": user_message.id,
+                    "conversation_id": int(conversation_id),
+                    "message": user_message.content,
+                    "sender_type": user_message.sender_type,
+                    "created_at": user_message.created_at.isoformat(),
+                }
+            )
+
+            try:
+                assistant_message = await generate_ai_response(
+                    self.conversation,
+                    user_message,
+                )
+            except Exception:
+                await self.send_json(
+                    {
+                        "type": "error",
+                        "code": "ai_response_error",
+                        "message": "Unable to generate AI response.",
+                    }
+                )    
+                return 
+
+            await self.channel_layer.group_send(
+                self.group_name,
+                {
+                    "type": "assistant_message",
+                    "event": "assistant_message",
+                    "message_id": assistant_message.id,
+                    "conversation_id": int(conversation_id),
+                    "response": assistant_message.content,
+                    "sender_type": assistant_message.sender_type,
+                    "created_at": assistant_message.created_at.isoformat(),
+                }
+            )
+
+    async def receive_voice_message(
+        self,
+        content,
+    ):
+        audio = content.get("audio")
+
+        if not isinstance(audio, str) or not audio.strip():
             await self.send_json(
                 {
                     "type": "error",
-                    "code": "invalid_message",
-                    "message": "Message cannot be empty.",
+                    "code": "invalid_audio",
+                    "message": "Audio cannot be empty.",
                 }
             )
             return
 
-        if len(message) > 10000:
+        try:
+            audio_data = base64.b64decode(
+                audio,
+                validate=True,
+            )
+        except (ValueError, TypeError):
             await self.send_json(
                 {
                     "type": "error",
-                    "code": "message_too_long",
-                    "message": "Message exceeds the maximum allowed length.",
+                    "code": "invalid_audio",
+                    "message": "Invalid audio data.",
                 }
             )
             return
 
-        conversation_id = self.scope["url_route"]["kwargs"].get(
-            "conversation_id"
-        )
+        if not audio_data:
+            await self.send_json(
+                {
+                    "type": "error",
+                    "code": "invalid_audio",
+                    "message": "Audio cannot be empty.",
+                }
+            )
+            return
 
-        user_message = await create_user_message(
-            self.conversation,
-            message.strip(),
+        input_language = content.get(
+            "input_language"
         )
-
-        await self.channel_layer.group_send(
-            self.group_name,
-            {
-                "type": "user_message",
-                "event": "user_message",
-                "message_id": user_message.id,
-                "conversation_id": int(conversation_id),
-                "message": user_message.content,
-                "sender_type": user_message.sender_type,
-                "created_at": user_message.created_at.isoformat(),
-            }
+        target_language = content.get(
+            "target_language"
+        )
+        voice = content.get(
+            "voice"
         )
 
         try:
-            assistant_message = await generate_ai_response(
+            result = await process_voice_message(
                 self.conversation,
-                user_message,
+                audio_data,
+                input_language=input_language,
+                target_language=target_language,
+                voice=voice,
             )
+            audio_output = result["audio"]
+
         except Exception:
             await self.send_json(
                 {
                     "type": "error",
-                    "code": "ai_response_error",
-                    "message": "Unable to generate AI response.",
+                    "code": "voice_response_error",
+                    "message": "Unable to process voice message.",
+                }
+            )
+            return
+
+        audio_output = result["audio"]
+
+        if not isinstance(audio_output, bytes):
+            await self.send_json(
+                {
+                    "type": "error",
+                    "code": "invalid_audio_response",
+                    "message": "Invalid audio response.",
+                }
+            )
+            return
+        try:
+            transcript = result["transcript"]
+            response_text = result["assistant_message"].content
+        except (KeyError, AttributeError, TypeError):
+            await self.send_json(
+                {
+                    "type": "error",
+                    "code": "voice_response_error",
+                    "message": "Unable to process voice message.",
                 }
             )    
-            return 
+            return
 
-        await self.channel_layer.group_send(
-            self.group_name,
+        if not isinstance(transcript, str) or not transcript.strip():
+            await self.send_json(
+                {
+                    "type": "error",
+                    "code": "voice_response_error",
+                    "message": "Unable to process voice message.",
+                }
+            )
+            return
+
+        await self.send_json(
             {
-                "type": "assistant_message",
-                "event": "assistant_message",
-                "message_id": assistant_message.id,
-                "conversation_id": int(conversation_id),
-                "response": assistant_message.content,
-                "sender_type": assistant_message.sender_type,
-                "created_at": assistant_message.created_at.isoformat(),
+                "type": "voice_message",
+                "conversation_id": self.conversation.id,
+                "transcript": transcript,
+                "response": response_text,
+                "audio": base64.b64encode(
+                    audio_output
+                ).decode("ascii"),
             }
-        )
+        )    
 
     async def user_message(self, event):
         await self.send_json(
