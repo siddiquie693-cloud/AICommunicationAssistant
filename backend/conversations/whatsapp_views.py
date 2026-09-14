@@ -2,6 +2,7 @@ from django.conf import settings
 from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from django.http import HttpResponse
 
 from ai.whatsapp.exceptions import (
     WhatsAppProviderError,
@@ -78,9 +79,10 @@ class WhatsAppWebhookAPIView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        return Response(
+        return HttpResponse(
             challenge_response,
             status=status.HTTP_200_OK,
+            content_type="text/plain",
         )
 
     def post(self, request, *args, **kwargs):

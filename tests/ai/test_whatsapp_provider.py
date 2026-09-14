@@ -1,14 +1,14 @@
 from django.test import SimpleTestCase
-
+from unittest.mock import patch
 from ai.whatsapp.base import WhatsAppProvider
 from ai.whatsapp.factory import get_whatsapp_provider
 from ai.whatsapp.mock import MockWhatsAppProvider
-
+from ai.whatsapp.meta import MetaWhatsAppProvider
 
 class WhatsAppProviderTests(SimpleTestCase):
 
     def test_get_whatsapp_provider_returns_mock_provider(self):
-        provider = get_whatsapp_provider()
+        provider = get_whatsapp_provider("mock")
 
         self.assertIsInstance(
             provider,
@@ -19,6 +19,30 @@ class WhatsAppProviderTests(SimpleTestCase):
             provider,
             WhatsAppProvider,
         )
+
+    def test_get_whatsapp_provider_uses_configured_provider(self):
+        with patch(
+            "ai.whatsapp.factory.MetaWhatsAppProvider"
+        ) as mock_provider:
+            provider = get_whatsapp_provider()
+
+        mock_provider.assert_called_once_with()
+        self.assertEqual(
+            provider,
+            mock_provider.return_value,
+        )    
+
+    def test_get_whatsapp_provider_returns_meta_provider(self):
+        with patch(
+            "ai.whatsapp.factory.MetaWhatsAppProvider"
+        ) as mock_provider:
+            provider = get_whatsapp_provider("meta")
+
+        mock_provider.assert_called_once_with()
+        self.assertEqual(
+            provider,
+            mock_provider.return_value,
+        )    
 
     def test_get_whatsapp_provider_returns_mock_provider_when_explicitly_requested(
         self,

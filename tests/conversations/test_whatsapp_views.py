@@ -24,7 +24,7 @@ class WhatsAppWebhookAPIViewTests(TestCase):
         )
 
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.data, "challenge_123")
+        self.assertEqual(response.content.decode(), "challenge_123")
 
     @override_settings(
         WHATSAPP_VERIFY_TOKEN="test_whatsapp_token"
