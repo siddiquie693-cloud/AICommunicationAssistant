@@ -1,5 +1,5 @@
-import { apiRequest } from './api';
 import { API_BASE_URL } from './config';
+import { apiRequest } from './api';
 
 export async function getMessages(
   token,
@@ -27,6 +27,38 @@ export async function createMessage(
         content,
         sender_type: 'user',
       },
+      token,
+    }
+  );
+}
+
+export async function updateMessage(
+  token,
+  conversationId,
+  messageId,
+  content
+) {
+  return apiRequest(
+    `/api/conversations/${conversationId}/messages/${messageId}/`,
+    {
+      method: 'PATCH',
+      body: {
+        content,
+      },
+      token,
+    }
+  );
+}
+
+export async function deleteMessage(
+  token,
+  conversationId,
+  messageId
+) {
+  return apiRequest(
+    `/api/conversations/${conversationId}/messages/${messageId}/`,
+    {
+      method: 'DELETE',
       token,
     }
   );
