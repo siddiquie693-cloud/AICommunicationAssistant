@@ -1,6 +1,7 @@
 from decouple import config
 
 from ai.providers.base import AIProvider
+from ai.providers.gemini import GeminiProvider
 from ai.providers.mock import MockAIProvider
 from ai.providers.openai import OpenAIProvider
 
@@ -36,6 +37,9 @@ def get_ai_provider(
 
     if provider_name == "openai":
         return OpenAIProvider()
+
+    if provider_name == "gemini":
+        return GeminiProvider()
 
     raise ValueError(
         f"Unsupported AI provider: {provider_name}"

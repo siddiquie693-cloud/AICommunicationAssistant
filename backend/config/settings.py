@@ -36,6 +36,7 @@ DEBUG = os.getenv("DJANGO_DEBUG", "False").lower() == "true"
 ALLOWED_HOSTS = [
     "127.0.0.1",
     "localhost",
+    "10.215.33.95",
     "promises-martin-perspective-ppc.trycloudflare.com",
 ]
 
