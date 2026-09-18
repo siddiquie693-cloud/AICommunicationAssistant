@@ -15,6 +15,7 @@ import {
   hasAccessToken,
   saveTokens,
 } from './src/storage';
+import { setSessionExpiredHandler } from './src/session';
 
 export default function App() {
   const [username, setUsername] = useState('');
@@ -32,6 +33,19 @@ export default function App() {
     };
 
     checkAuthentication();
+
+    setSessionExpiredHandler(() => {
+      setIsAuthenticated(false);
+
+      Alert.alert(
+        'Session expired',
+        'Your session has expired. Please log in again.'
+      );
+    });
+
+    return () => {
+      setSessionExpiredHandler(null);
+    };
   }, []);
 
   const handleLogin = async () => {
@@ -55,7 +69,7 @@ export default function App() {
         data.access,
         data.refresh
       );
-
+      
       Alert.alert(
         'Login successful',
         'Authentication completed successfully.'

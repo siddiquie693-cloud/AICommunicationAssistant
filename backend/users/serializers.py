@@ -2,6 +2,7 @@ from django.contrib.auth import get_user_model
 from rest_framework import serializers
 from rest_framework_simplejwt.tokens import RefreshToken
 from datetime import timedelta
+from rest_framework_simplejwt.exceptions import TokenError
 from django.utils import timezone
 from .models import (
     PasswordResetToken,
@@ -61,7 +62,12 @@ class LogoutSerializer(serializers.Serializer):
     refresh = serializers.CharField()
 
     def validate(self, attrs):
-        self.token = RefreshToken(attrs["refresh"])
+        try:
+            self.token = RefreshToken(attrs["refresh"])
+        except TokenError:
+            raise serializers.ValidationError(
+                {"refresh": "Invalid or expired refresh token."}
+            )    
         return attrs
 
     def save(self, **kwargs):
