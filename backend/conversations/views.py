@@ -243,6 +243,7 @@ class AIMessageStreamAPIView(generics.GenericAPIView):
         )
 
         content = request.data.get("content", "")
+        preferred_language = request.data.get("preferred_language")
 
         if not isinstance(content, str) or not content.strip():
             return Response(
@@ -265,9 +266,13 @@ class AIMessageStreamAPIView(generics.GenericAPIView):
                 yield from ai_service.generate_stream(
                     conversation=conversation,
                     user_message=user_message,
+                    preferred_language=preferred_language,
                 )
-            except AIProviderError:
-                return
+            except AIProviderError as exc:
+                yield (
+                    "AI service is temporarily unavailable. "
+                    "Please try again later."
+                )
 
         return StreamingHttpResponse(
             stream_response(),

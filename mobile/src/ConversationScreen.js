@@ -1,4 +1,10 @@
-import { useEffect, useRef, useState } from 'react';
+import React, {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from 'react';
+
 import {
   ActivityIndicator,
   Alert,
@@ -14,39 +20,61 @@ import {
 
 import * as Clipboard from 'expo-clipboard';
 
-import { formatMessageTime } from './formatters';
 import {
+  createMessage,
   deleteMessage,
   getMessages,
   streamAIMessage,
   updateMessage,
 } from './messages';
-import { getAccessToken } from './storage';
+
+import {
+  formatMessageTime,
+} from './formatters';
+
+import {
+  getAccessToken,
+} from './storage';
+
 
 export default function ConversationScreen({
   conversation,
+  preferredLanguage,
   onBack,
 }) {
+  console.log(
+    'CONVERSATION SCREEN PROP:',
+    conversation
+  );
+  console.log(
+    'PREFERRED LANGUAGE PROP:',
+    preferredLanguage
+  );
+
   const [messages, setMessages] = useState([]);
   const [messageText, setMessageText] = useState('');
-
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState('');
 
-  const [editingMessageId, setEditingMessageId] = useState(null);
-  const [editingText, setEditingText] = useState('');
-  const [savingEdit, setSavingEdit] = useState(false);
+  const [editingMessageId, setEditingMessageId] =
+    useState(null);
+
+  const [editingText, setEditingText] =
+    useState('');
+
+  const [savingMessageId, setSavingMessageId] =
+    useState(null);
 
   const [deletingMessageId, setDeletingMessageId] =
     useState(null);
 
   const flatListRef = useRef(null);
-
-  const loadMessages = async (showLoader = true) => {
+  const loadMessages = useCallback(
+  async (showLoading = true) => {
     try {
-      if (showLoader) {
+      if (showLoading) {
         setLoading(true);
       } else {
         setRefreshing(true);
@@ -67,78 +95,98 @@ export default function ConversationScreen({
         conversation.id
       );
 
-      setMessages(data?.results || data || []);
+      const messageList =
+        data?.results ||
+        data ||
+        [];
+
+      const orderedMessages =
+        Array.isArray(messageList)
+          ? [...messageList].reverse()
+          : [];
+
+      setMessages(orderedMessages);
     } catch (err) {
       setError(
-        err.message ||
-        'Unable to load messages.'
+        err?.message ||
+        'Failed to load messages.'
       );
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  };
+  },
+  [conversation.id]
+);
+
 
   useEffect(() => {
-    loadMessages();
-  }, [conversation.id]);
+    loadMessages(true);
+  }, [loadMessages]);
 
-  const handleRefreshMessages = async () => {
-    await loadMessages(false);
+
+  const scrollToBottom = () => {
+    setTimeout(() => {
+      flatListRef.current?.scrollToEnd({
+        animated: true,
+      });
+    }, 100);
   };
 
-  const handleCopyMessage = async (content) => {
+
+  const handleRefresh = () => {
+    loadMessages(false);
+  };
+
+
+  const handleCopyMessage = async (message) => {
     try {
-      await Clipboard.setStringAsync(content);
+      await Clipboard.setStringAsync(
+        message.content || ''
+      );
 
       Alert.alert(
         'Copied',
         'Message copied to clipboard.'
       );
-    } catch (error) {
+    } catch (err) {
       Alert.alert(
-        'Unable to copy',
-        'The message could not be copied.'
+        'Copy failed',
+        'Unable to copy this message.'
       );
     }
   };
 
-  const startEditingMessage = (message) => {
+
+  const handleEditMessage = (message) => {
     setEditingMessageId(message.id);
-    setEditingText(message.content);
+    setEditingText(message.content || '');
   };
 
-  const cancelEditing = () => {
+
+  const handleCancelEdit = () => {
     setEditingMessageId(null);
     setEditingText('');
-    setSavingEdit(false);
   };
 
-  const handleSaveEdit = async () => {
+
+  const handleSaveEdit = async (message) => {
     const content = editingText.trim();
 
     if (!content) {
       Alert.alert(
         'Invalid message',
-        'Message cannot be empty.'
+        'Message content cannot be empty.'
       );
       return;
     }
 
-    if (content.length > 2000) {
-      Alert.alert(
-        'Message too long',
-        'Message cannot exceed 2000 characters.'
-      );
-      return;
-    }
-
-    if (savingEdit) {
+    if (savingMessageId) {
       return;
     }
 
     try {
-      setSavingEdit(true);
+      setSavingMessageId(message.id);
 
       const token = await getAccessToken();
 
@@ -152,39 +200,41 @@ export default function ConversationScreen({
         await updateMessage(
           token,
           conversation.id,
-          editingMessageId,
+          message.id,
           content
         );
 
       setMessages((currentMessages) =>
-        currentMessages.map((message) =>
-          message.id === editingMessageId
+        currentMessages.map((currentMessage) =>
+          currentMessage.id === message.id
             ? {
-                ...message,
+                ...currentMessage,
                 ...(updatedMessage || {}),
                 content,
               }
-            : message
+            : currentMessage
         )
       );
 
-      cancelEditing();
-
-      Alert.alert(
-        'Message updated',
-        'Your message was updated successfully.'
-      );
+      setEditingMessageId(null);
+      setEditingText('');
     } catch (err) {
       Alert.alert(
-        'Unable to update message',
-        err.message ||
-          'The message could not be updated.'
+        'Update failed',
+        err?.message ||
+        'Unable to update message.'
       );
-      setSavingEdit(false);
+    } finally {
+      setSavingMessageId(null);
     }
   };
 
-  const confirmDeleteMessage = (message) => {
+
+  const handleDeleteMessage = (message) => {
+    if (deletingMessageId) {
+      return;
+    }
+
     Alert.alert(
       'Delete message',
       'Are you sure you want to delete this message?',
@@ -196,62 +246,59 @@ export default function ConversationScreen({
         {
           text: 'Delete',
           style: 'destructive',
-          onPress: () =>
-            handleDeleteMessage(message.id),
+          onPress: async () => {
+            try {
+              setDeletingMessageId(message.id);
+
+              const token =
+                await getAccessToken();
+
+              if (!token) {
+                throw new Error(
+                  'Authentication token not found.'
+                );
+              }
+
+              await deleteMessage(
+                token,
+                conversation.id,
+                message.id
+              );
+
+              setMessages(
+                (currentMessages) =>
+                  currentMessages.filter(
+                    (currentMessage) =>
+                      currentMessage.id !==
+                      message.id
+                  )
+              );
+            } catch (err) {
+              Alert.alert(
+                'Delete failed',
+                err?.message ||
+                'Unable to delete message.'
+              );
+            } finally {
+              setDeletingMessageId(null);
+            }
+          },
         },
       ]
     );
   };
 
-  const handleDeleteMessage = async (messageId) => {
-    if (deletingMessageId) {
+
+  const handleMessageActions = (message) => {
+    if (message.isTemporary) {
       return;
     }
 
-    try {
-      setDeletingMessageId(messageId);
-
-      const token = await getAccessToken();
-
-      if (!token) {
-        throw new Error(
-          'Authentication token not found.'
-        );
-      }
-
-      await deleteMessage(
-        token,
-        conversation.id,
-        messageId
-      );
-
-      setMessages((currentMessages) =>
-        currentMessages.filter(
-          (message) =>
-            message.id !== messageId
-        )
-      );
-
-      if (editingMessageId === messageId) {
-        cancelEditing();
-      }
-    } catch (err) {
-      Alert.alert(
-        'Unable to delete message',
-        err.message ||
-          'The message could not be deleted.'
-      );
-    } finally {
-      setDeletingMessageId(null);
-    }
-  };
-
-  const handleMessageLongPress = (message) => {
     const actions = [
       {
         text: 'Copy',
         onPress: () =>
-          handleCopyMessage(message.content),
+          handleCopyMessage(message),
       },
     ];
 
@@ -259,7 +306,7 @@ export default function ConversationScreen({
       actions.push({
         text: 'Edit',
         onPress: () =>
-          startEditingMessage(message),
+          handleEditMessage(message),
       });
     }
 
@@ -267,7 +314,7 @@ export default function ConversationScreen({
       text: 'Delete',
       style: 'destructive',
       onPress: () =>
-        confirmDeleteMessage(message),
+        handleDeleteMessage(message),
     });
 
     actions.push({
@@ -277,113 +324,135 @@ export default function ConversationScreen({
 
     Alert.alert(
       'Message actions',
-      'Choose an action',
+      null,
       actions
     );
   };
 
   const handleSendMessage = async () => {
-    const content = messageText.trim();
+  const content = messageText.trim();
 
-    if (!content || sending) {
-      return;
-    }
+  if (!content || sending) {
+    return;
+  }
 
-    if (content.length > 2000) {
-      Alert.alert(
-        'Message too long',
-        'Message cannot exceed 2000 characters.'
+  if (!conversation?.id) {
+    Alert.alert(
+      'Unable to send',
+      'Conversation ID is missing.'
+    );
+    return;
+  }
+
+  setSending(true);
+  setError('');
+  setMessageText('');
+
+  try {
+    const token = await getAccessToken();
+
+    if (!token) {
+      throw new Error(
+        'Authentication token not found.'
       );
-      return;
     }
 
-    try {
-      setSending(true);
-      setError('');
-      setMessageText('');
+    const temporaryUserId =
+      `temporary-user-${Date.now()}`;
 
-      const token = await getAccessToken();
+    const temporaryAssistantId =
+      `temporary-assistant-${Date.now()}`;
 
-      if (!token) {
-        throw new Error(
-          'Authentication token not found.'
+    const temporaryUserMessage = {
+      id: temporaryUserId,
+      sender_type: 'user',
+      content,
+      created_at:
+        new Date().toISOString(),
+      isTemporary: true,
+    };
+
+    const temporaryAssistantMessage = {
+      id: temporaryAssistantId,
+      sender_type: 'assistant',
+      content: '',
+      created_at:
+        new Date().toISOString(),
+      isTemporary: true,
+    };
+
+    setMessages((currentMessages) => [
+      ...currentMessages,
+      temporaryUserMessage,
+      temporaryAssistantMessage,
+    ]);
+
+    await streamAIMessage(
+      token,
+      conversation.id,
+      content,
+      preferredLanguage,
+      (chunk) => {
+        setMessages((currentMessages) =>
+          currentMessages.map((message) =>
+            message.id === temporaryAssistantId
+              ? {
+                  ...message,
+                  content:
+                    message.content + chunk,
+                }
+              : message
+          )
         );
       }
+    );
 
-      const temporaryUserMessage = {
-        id: `temporary-user-${Date.now()}`,
-        sender_type: 'user',
-        content,
-        created_at: new Date().toISOString(),
-        isTemporary: true,
-      };
-
-      const temporaryAssistantId =
-        `temporary-assistant-${Date.now()}`;
-
-      const temporaryAssistantMessage = {
-        id: temporaryAssistantId,
-        sender_type: 'assistant',
-        content: '',
-        created_at: new Date().toISOString(),
-        isTemporary: true,
-      };
-
-      setMessages((currentMessages) => [
-        ...currentMessages,
-        temporaryUserMessage,
-        temporaryAssistantMessage,
-      ]);
-
-      await streamAIMessage(
+    /*
+     * Streaming is complete.
+     * Fetch the authoritative message history
+     * from the backend and completely replace
+     * the temporary local messages.
+     */
+    const latestMessages =
+      await getMessages(
         token,
-        conversation.id,
-        content,
-        (chunk) => {
-          setMessages((currentMessages) =>
-            currentMessages.map((message) =>
-              message.id === temporaryAssistantId
-                ? {
-                    ...message,
-                    content:
-                      message.content + chunk,
-                  }
-                : message
-            )
-          );
-        }
+        conversation.id
       );
 
-      await loadMessages(false);
-    } catch (err) {
-      setMessageText(content);
+    const serverMessages =
+      latestMessages?.results ||
+      latestMessages ||
+      [];
+    const orderedMessages = Array.isArray(serverMessages)
+      ? [...serverMessages].reverse()
+      : [];
 
-      setMessages((currentMessages) =>
-        currentMessages.filter(
-          (message) =>
-            !message.isTemporary
-        )
-      );
+    setMessages(orderedMessages);
 
-      Alert.alert(
-        'Unable to send message',
-        err.message ||
-          'The message could not be sent.'
-      );
-    } finally {
-      setSending(false);
-    }
-  };
 
-  const scrollToBottom = () => {
-    requestAnimationFrame(() => {
-      flatListRef.current?.scrollToEnd({
-        animated: true,
-      });
-    });
-  };
+    scrollToBottom();
+  } catch (err) {
+    setMessageText(content);
 
-  const renderMessage = ({ item }) => {
+    setMessages((currentMessages) =>
+      currentMessages.filter(
+        (message) => !message.isTemporary
+      )
+    );
+
+    Alert.alert(
+      'Message failed',
+      err?.message ||
+        'Unable to send message.'
+    );
+  } finally {
+    setSending(false);
+  }
+};
+
+  const renderMessage = ({
+    item,
+  }) => {
     const isUser =
       item.sender_type === 'user';
 
@@ -393,86 +462,26 @@ export default function ConversationScreen({
     const isDeleting =
       deletingMessageId === item.id;
 
-    if (isEditing) {
-      return (
-        <View style={styles.editContainer}>
-          <Text style={styles.editLabel}>
-            Edit message
-          </Text>
-
-          <TextInput
-            value={editingText}
-            onChangeText={setEditingText}
-            multiline
-            maxLength={2000}
-            autoFocus
-            editable={!savingEdit}
-            style={styles.editInput}
-            textAlignVertical="top"
-          />
-
-          <View style={styles.editFooter}>
-            <Text style={styles.characterCounter}>
-              {editingText.length}/2000
-            </Text>
-
-            <View style={styles.editActions}>
-              <Pressable
-                style={styles.cancelButton}
-                onPress={cancelEditing}
-                disabled={savingEdit}
-              >
-                <Text style={styles.cancelButtonText}>
-                  Cancel
-                </Text>
-              </Pressable>
-
-              <Pressable
-                style={styles.saveButton}
-                onPress={handleSaveEdit}
-                disabled={
-                  savingEdit ||
-                  !editingText.trim()
-                }
-              >
-                {savingEdit ? (
-                  <ActivityIndicator
-                    size="small"
-                    color="#ffffff"
-                  />
-                ) : (
-                  <Text style={styles.saveButtonText}>
-                    Save
-                  </Text>
-                )}
-              </Pressable>
-            </View>
-          </View>
-        </View>
-      );
-    }
-
     return (
       <View
         style={[
           styles.messageRow,
           isUser
-            ? styles.userRow
-            : styles.assistantRow,
+            ? styles.userMessageRow
+            : styles.assistantMessageRow,
         ]}
       >
         <Pressable
-          onLongPress={() =>
-            handleMessageLongPress(item)
-          }
-          delayLongPress={400}
-          disabled={isDeleting}
           style={[
             styles.messageBubble,
             isUser
               ? styles.userBubble
               : styles.assistantBubble,
           ]}
+          onLongPress={() =>
+            handleMessageActions(item)
+          }
+          delayLongPress={400}
         >
           <Text
             style={[
@@ -482,92 +491,138 @@ export default function ConversationScreen({
                 : styles.assistantSenderLabel,
             ]}
           >
-            {isUser ? 'You' : 'AI Assistant'}
+            {isUser
+              ? 'You'
+              : 'AI Assistant'}
           </Text>
 
-          <Text
-            style={[
-              styles.messageText,
-              isUser
-                ? styles.userMessageText
-                : styles.assistantMessageText,
-            ]}
+          {isEditing ? (
+            <View style={styles.editContainer}>
+              <TextInput
+                style={styles.editInput}
+                value={editingText}
+                onChangeText={setEditingText}
+                multiline
+                maxLength={2000}
+                autoFocus
+              />
+
+              <View
+                style={styles.editActions}
+              >
+                <Pressable
+                  style={[
+                    styles.editActionButton,
+                    styles.cancelEditButton,
+                  ]}
+                  onPress={
+                    handleCancelEdit
+                  }
+                  disabled={
+                    savingMessageId ===
+                    item.id
+                  }
+                >
+                  <Text
+                    style={
+                      styles.cancelEditText
+                    }
+                  >
+                    Cancel
+                  </Text>
+                </Pressable>
+
+                <Pressable
+                  style={[
+                    styles.editActionButton,
+                    styles.saveEditButton,
+                  ]}
+                  onPress={() =>
+                    handleSaveEdit(item)
+                  }
+                  disabled={
+                    savingMessageId ===
+                    item.id
+                  }
+                >
+                  {savingMessageId ===
+                  item.id ? (
+                    <ActivityIndicator
+                      size="small"
+                      color="#ffffff"
+                    />
+                  ) : (
+                    <Text
+                      style={
+                        styles.saveEditText
+                      }
+                    >
+                      Save
+                    </Text>
+                  )}
+                </Pressable>
+              </View>
+            </View>
+          ) : (
+            <Text
+              style={[
+                styles.messageText,
+                isUser
+                  ? styles.userMessageText
+                  : styles.assistantMessageText,
+              ]}
+            >
+              {item.content || ''}
+            </Text>
+          )}
+
+          <View
+            style={styles.messageFooter}
           >
-            {item.content}
-          </Text>
+            <Text
+              style={[
+                styles.timestamp,
+                isUser
+                  ? styles.userTimestamp
+                  : styles.assistantTimestamp,
+              ]}
+            >
+              {formatMessageTime(
+                item.created_at
+              )}
+            </Text>
 
-          <Text
-            style={[
-              styles.timestamp,
-              isUser
-                ? styles.userTimestamp
-                : styles.assistantTimestamp,
-            ]}
-          >
-            {formatMessageTime(
-              item.created_at
-            )}
-          </Text>
-
-          {isDeleting && (
-            <View style={styles.deleteOverlay}>
+            {item.isTemporary && (
               <ActivityIndicator
                 size="small"
-                color="#ffffff"
+                style={styles.temporaryLoader}
               />
-            </View>
-          )}
+            )}
+
+            {isDeleting && (
+              <ActivityIndicator
+                size="small"
+                style={styles.temporaryLoader}
+              />
+            )}
+          </View>
         </Pressable>
       </View>
     );
   };
 
+
   if (loading) {
     return (
       <View style={styles.centerContainer}>
-        <ActivityIndicator
-          size="large"
-          color="#2563eb"
-        />
-
-        <Text style={styles.loadingText}>
+        <ActivityIndicator size="large" />
+        <Text style={styles.statusText}>
           Loading messages...
         </Text>
       </View>
     );
   }
 
-  if (error && messages.length === 0) {
-    return (
-      <View style={styles.errorContainer}>
-        <Text style={styles.errorTitle}>
-          Unable to load conversation
-        </Text>
-
-        <Text style={styles.errorText}>
-          {error}
-        </Text>
-
-        <Pressable
-          style={styles.retryButton}
-          onPress={() => loadMessages()}
-        >
-          <Text style={styles.retryButtonText}>
-            Retry
-          </Text>
-        </Pressable>
-
-        <Pressable
-          style={styles.backButton}
-          onPress={onBack}
-        >
-          <Text style={styles.backButtonText}>
-            Back
-          </Text>
-        </Pressable>
-      </View>
-    );
-  }
 
   return (
     <KeyboardAvoidingView
@@ -580,108 +635,130 @@ export default function ConversationScreen({
     >
       <View style={styles.header}>
         <Pressable
+          style={styles.backButton}
           onPress={onBack}
-          style={styles.headerBackButton}
         >
-          <Text style={styles.headerBackText}>
-            ‹
+          <Text style={styles.backButtonText}>
+            Back
           </Text>
         </Pressable>
 
-        <View style={styles.headerTitleContainer}>
+        <View
+          style={styles.headerContent}
+        >
           <Text
             style={styles.headerTitle}
             numberOfLines={1}
           >
-            {conversation.title}
-          </Text>
-
-          <Text style={styles.headerSubtitle}>
-            AI Communication Assistant
+            {conversation?.title ||
+              'Conversation'}
           </Text>
         </View>
-
-        <Pressable
-          onPress={handleRefreshMessages}
-          disabled={refreshing}
-          style={styles.refreshButton}
-        >
-          {refreshing ? (
-            <ActivityIndicator
-              size="small"
-              color="#2563eb"
-            />
-          ) : (
-            <Text style={styles.refreshText}>
-              ↻
-            </Text>
-          )}
-        </Pressable>
       </View>
+
+      {error && (
+        <View style={styles.errorContainer}>
+          <Text style={styles.errorText}>
+            {error}
+          </Text>
+
+          <Pressable
+            style={styles.retryButton}
+            onPress={() =>
+              loadMessages(true)
+            }
+          >
+            <Text
+              style={styles.retryButtonText}
+            >
+              Retry
+            </Text>
+          </Pressable>
+        </View>
+      )}
 
       <FlatList
         ref={flatListRef}
         data={messages}
-        keyExtractor={(item) =>
-          String(item.id)
+        keyExtractor={(item, index) =>
+          String(
+            item.id ??
+            `message-${index}`
+          )
         }
         renderItem={renderMessage}
         contentContainerStyle={[
-          styles.messagesContainer,
+          styles.messageList,
           messages.length === 0 &&
-            styles.emptyMessagesContainer,
+            styles.emptyMessageList,
         ]}
-        keyboardShouldPersistTaps="handled"
-        onContentSizeChange={scrollToBottom}
+        refreshing={refreshing}
+        onRefresh={handleRefresh}
+        onContentSizeChange={() => {
+          flatListRef.current?.scrollToEnd({
+            animated: true,
+          });
+        }}
         ListEmptyComponent={
-          <View style={styles.emptyContainer}>
-            <Text style={styles.emptyIcon}>
-              💬
-            </Text>
+          !error ? (
+            <View
+              style={styles.emptyContainer}
+            >
+              <Text
+                style={
+                  styles.emptyTitle
+                }
+              >
+                No messages yet
+              </Text>
 
-            <Text style={styles.emptyTitle}>
-              No messages yet
-            </Text>
-
-            <Text style={styles.emptyText}>
-              Start the conversation by
-              sending a message below.
-            </Text>
-          </View>
+              <Text
+                style={
+                  styles.emptySubtitle
+                }
+              >
+                Start a conversation
+                with the AI assistant.
+              </Text>
+            </View>
+          ) : null
         }
       />
 
       <View style={styles.composerContainer}>
         <View style={styles.inputWrapper}>
           <TextInput
+            style={styles.messageInput}
             value={messageText}
             onChangeText={setMessageText}
             placeholder="Type a message..."
-            placeholderTextColor="#9ca3af"
             multiline
             maxLength={2000}
             editable={!sending}
-            style={styles.input}
             textAlignVertical="top"
           />
 
-          <Text style={styles.characterCounter}>
+          <Text
+            style={styles.characterCounter}
+          >
             {messageText.length}/2000
           </Text>
         </View>
 
         <Pressable
-          onPress={handleSendMessage}
-          disabled={
-            sending ||
-            !messageText.trim()
-          }
           style={[
             styles.sendButton,
-            (sending ||
-              !messageText.trim()) &&
+            (
+              !messageText.trim() ||
+              sending
+            ) &&
               styles.sendButtonDisabled,
           ]}
+          onPress={handleSendMessage}
+          disabled={
+            !messageText.trim() ||
+            sending
+          }
         >
           {sending ? (
             <ActivityIndicator
@@ -689,7 +766,9 @@ export default function ConversationScreen({
               color="#ffffff"
             />
           ) : (
-            <Text style={styles.sendButtonText}>
+            <Text
+              style={styles.sendButtonText}
+            >
               Send
             </Text>
           )}
@@ -699,187 +778,129 @@ export default function ConversationScreen({
   );
 }
 
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8fafc',
+    backgroundColor: '#f5f5f5',
   },
 
   centerContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#f8fafc',
+    backgroundColor: '#f5f5f5',
   },
 
-  loadingText: {
-    marginTop: 12,
-    fontSize: 14,
-    color: '#64748b',
+  statusText: {
+    marginTop: 10,
+    color: '#666666',
+  },
+
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    backgroundColor: '#ffffff',
+    borderBottomWidth: 1,
+    borderBottomColor: '#dddddd',
+  },
+
+  backButton: {
+    paddingVertical: 6,
+    paddingRight: 12,
+  },
+
+  backButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+  },
+
+  headerContent: {
+    flex: 1,
+  },
+
+  headerTitle: {
+    fontSize: 18,
+    fontWeight: '700',
   },
 
   errorContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 24,
-    backgroundColor: '#f8fafc',
-  },
-
-  errorTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: '#0f172a',
-    marginBottom: 8,
-    textAlign: 'center',
+    padding: 12,
+    backgroundColor: '#ffecec',
+    borderBottomWidth: 1,
+    borderBottomColor: '#ffcccc',
   },
 
   errorText: {
-    fontSize: 14,
-    color: '#64748b',
-    textAlign: 'center',
-    marginBottom: 20,
+    color: '#b00020',
+    marginBottom: 8,
   },
 
   retryButton: {
-    minWidth: 120,
-    paddingVertical: 12,
-    paddingHorizontal: 20,
-    borderRadius: 10,
-    backgroundColor: '#2563eb',
-    alignItems: 'center',
-    marginBottom: 10,
+    alignSelf: 'flex-start',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    backgroundColor: '#b00020',
   },
 
   retryButtonText: {
     color: '#ffffff',
-    fontSize: 15,
     fontWeight: '600',
   },
 
-  backButton: {
-    paddingVertical: 10,
-    paddingHorizontal: 20,
+  messageList: {
+    padding: 12,
+    paddingBottom: 20,
   },
 
-  backButtonText: {
-    color: '#2563eb',
-    fontSize: 15,
-    fontWeight: '600',
-  },
-
-  header: {
-    minHeight: 68,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    backgroundColor: '#ffffff',
-    borderBottomWidth: 1,
-    borderBottomColor: '#e2e8f0',
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-
-  headerBackButton: {
-    width: 40,
-    height: 40,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-
-  headerBackText: {
-    fontSize: 34,
-    color: '#2563eb',
-    lineHeight: 38,
-  },
-
-  headerTitleContainer: {
-    flex: 1,
-    marginHorizontal: 8,
-  },
-
-  headerTitle: {
-    fontSize: 17,
-    fontWeight: '700',
-    color: '#0f172a',
-  },
-
-  headerSubtitle: {
-    marginTop: 2,
-    fontSize: 11,
-    color: '#64748b',
-  },
-
-  refreshButton: {
-    width: 40,
-    height: 40,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-
-  refreshText: {
-    fontSize: 25,
-    color: '#2563eb',
-  },
-
-  messagesContainer: {
-    paddingHorizontal: 12,
-    paddingVertical: 16,
-  },
-
-  emptyMessagesContainer: {
+  emptyMessageList: {
     flexGrow: 1,
-    justifyContent: 'center',
   },
 
   emptyContainer: {
+    flex: 1,
+    justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: 30,
   },
 
-  emptyIcon: {
-    fontSize: 42,
-    marginBottom: 12,
-  },
-
   emptyTitle: {
-    fontSize: 19,
+    fontSize: 20,
     fontWeight: '700',
-    color: '#0f172a',
-    marginBottom: 6,
+    marginBottom: 8,
   },
 
-  emptyText: {
-    fontSize: 14,
-    lineHeight: 21,
-    color: '#64748b',
+  emptySubtitle: {
     textAlign: 'center',
+    color: '#666666',
+    fontSize: 15,
   },
 
   messageRow: {
     width: '100%',
     marginBottom: 10,
-    flexDirection: 'row',
   },
 
-  userRow: {
-    justifyContent: 'flex-end',
+  userMessageRow: {
+    alignItems: 'flex-end',
   },
 
-  assistantRow: {
-    justifyContent: 'flex-start',
+  assistantMessageRow: {
+    alignItems: 'flex-start',
   },
 
   messageBubble: {
     maxWidth: '82%',
-    minWidth: 80,
+    borderRadius: 16,
     paddingHorizontal: 14,
     paddingVertical: 10,
-    borderRadius: 16,
-    overflow: 'hidden',
   },
 
   userBubble: {
-    backgroundColor: '#2563eb',
+    backgroundColor: '#dbeafe',
     borderBottomRightRadius: 4,
   },
 
@@ -887,166 +908,145 @@ const styles = StyleSheet.create({
     backgroundColor: '#ffffff',
     borderBottomLeftRadius: 4,
     borderWidth: 1,
-    borderColor: '#e2e8f0',
+    borderColor: '#e2e2e2',
   },
 
   senderLabel: {
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: '700',
     marginBottom: 4,
   },
 
   userSenderLabel: {
-    color: '#dbeafe',
+    color: '#2563eb',
   },
 
   assistantSenderLabel: {
-    color: '#64748b',
+    color: '#555555',
   },
 
   messageText: {
-    fontSize: 15,
-    lineHeight: 21,
+    fontSize: 16,
+    lineHeight: 22,
   },
 
   userMessageText: {
-    color: '#ffffff',
+    color: '#111827',
   },
 
   assistantMessageText: {
-    color: '#0f172a',
+    color: '#222222',
+  },
+
+  messageFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 6,
   },
 
   timestamp: {
-    fontSize: 10,
-    marginTop: 5,
+    fontSize: 11,
   },
 
   userTimestamp: {
-    color: '#bfdbfe',
-    textAlign: 'right',
+    color: '#64748b',
   },
 
   assistantTimestamp: {
-    color: '#94a3b8',
-    textAlign: 'right',
+    color: '#888888',
   },
 
-  deleteOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(15, 23, 42, 0.65)',
-    justifyContent: 'center',
-    alignItems: 'center',
+  temporaryLoader: {
+    marginLeft: 6,
   },
 
   editContainer: {
     width: '100%',
-    marginBottom: 12,
-    padding: 12,
-    backgroundColor: '#ffffff',
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: '#93c5fd',
-  },
-
-  editLabel: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#2563eb',
-    marginBottom: 8,
   },
 
   editInput: {
     minHeight: 80,
     maxHeight: 180,
-    padding: 10,
-    borderRadius: 10,
-    backgroundColor: '#f8fafc',
     borderWidth: 1,
-    borderColor: '#cbd5e1',
-    color: '#0f172a',
+    borderColor: '#cccccc',
+    borderRadius: 10,
+    backgroundColor: '#ffffff',
+    padding: 10,
     fontSize: 15,
-  },
-
-  editFooter: {
-    marginTop: 8,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    textAlignVertical: 'top',
   },
 
   editActions: {
     flexDirection: 'row',
+    justifyContent: 'flex-end',
+    marginTop: 8,
     gap: 8,
   },
 
-  cancelButton: {
-    paddingVertical: 9,
-    paddingHorizontal: 14,
-    borderRadius: 9,
-    backgroundColor: '#e2e8f0',
+  editActionButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
   },
 
-  cancelButtonText: {
-    color: '#334155',
-    fontWeight: '600',
+  cancelEditButton: {
+    backgroundColor: '#eeeeee',
   },
 
-  saveButton: {
-    minWidth: 70,
-    paddingVertical: 9,
-    paddingHorizontal: 14,
-    borderRadius: 9,
+  saveEditButton: {
     backgroundColor: '#2563eb',
+    minWidth: 60,
     alignItems: 'center',
   },
 
-  saveButtonText: {
+  cancelEditText: {
+    color: '#333333',
+    fontWeight: '600',
+  },
+
+  saveEditText: {
     color: '#ffffff',
     fontWeight: '600',
   },
 
   composerContainer: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
     padding: 10,
     backgroundColor: '#ffffff',
     borderTopWidth: 1,
-    borderTopColor: '#e2e8f0',
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    gap: 8,
+    borderTopColor: '#dddddd',
   },
 
   inputWrapper: {
     flex: 1,
     position: 'relative',
+    marginRight: 8,
   },
 
-  input: {
+  messageInput: {
     minHeight: 48,
     maxHeight: 120,
-    paddingTop: 12,
-    paddingBottom: 25,
-    paddingHorizontal: 12,
-    borderRadius: 14,
-    backgroundColor: '#f8fafc',
     borderWidth: 1,
-    borderColor: '#cbd5e1',
-    color: '#0f172a',
-    fontSize: 15,
+    borderColor: '#cccccc',
+    borderRadius: 14,
+    backgroundColor: '#ffffff',
+    paddingHorizontal: 12,
+    paddingTop: 10,
+    paddingBottom: 24,
+    fontSize: 16,
   },
 
   characterCounter: {
-    fontSize: 10,
-    color: '#94a3b8',
-  },
-
-  inputWrapper: {
-    flex: 1,
-    position: 'relative',
+    position: 'absolute',
+    right: 10,
+    bottom: 6,
+    fontSize: 11,
+    color: '#888888',
   },
 
   sendButton: {
-    minWidth: 72,
+    minWidth: 70,
     height: 48,
     paddingHorizontal: 14,
     borderRadius: 14,
@@ -1056,12 +1056,12 @@ const styles = StyleSheet.create({
   },
 
   sendButtonDisabled: {
-    backgroundColor: '#94a3b8',
+    opacity: 0.5,
   },
 
   sendButtonText: {
     color: '#ffffff',
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: '700',
   },
 });

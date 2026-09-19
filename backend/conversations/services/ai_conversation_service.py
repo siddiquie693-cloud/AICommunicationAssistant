@@ -227,6 +227,7 @@ class AIConversationService:
         self,
         conversation: Conversation,
         user_message: Message,
+        preferred_language: str | None = None,
     ):
         """
         Generate an AI response as a stream of text chunks
@@ -238,9 +239,19 @@ class AIConversationService:
             exclude_message_id=user_message.id,
         )
 
+        system_prompt = CONVERSATION_SYSTEM_PROMPT
+
+        if preferred_language:
+            system_prompt = (
+                f"{CONVERSATION_SYSTEM_PROMPT}\n\n"
+                f"Response in the user's preferred language. "
+                f"The preferred language code is: "
+                f"{preferred_language}."
+            )
+
         chunks = self.ai_service.generate_stream(
             user_message.content,
-            system_prompt=CONVERSATION_SYSTEM_PROMPT,
+            system_prompt=system_prompt,
             messages=messages,
         )
 

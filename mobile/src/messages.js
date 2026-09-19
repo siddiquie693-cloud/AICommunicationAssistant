@@ -68,6 +68,7 @@ export async function streamAIMessage(
   token,
   conversationId,
   content,
+  preferredLanguage,
   onChunk
 ) {
   const response = await fetch(
@@ -80,6 +81,7 @@ export async function streamAIMessage(
       },
       body: JSON.stringify({
         content,
+        preferred_language: preferredLanguage,
       }),
     }
   );
@@ -140,5 +142,14 @@ export async function streamAIMessage(
     }
   }
 
-  return completedText;
+  if (
+    completedText.trim() ===
+    'AI service is temporarily unavailable. Please try again later.'
+   ){
+    throw new Error(
+      'AI service is temporarily unavailable. Please try again later.'
+    );
+    }
+
+    return completedText;
 }
