@@ -2,6 +2,9 @@ from django.contrib.auth import get_user_model
 from django.test import TestCase
 from rest_framework import status
 from rest_framework.test import APITestCase
+from unittest.mock import patch
+
+from ai.text_to_speech.exceptions import TextToSpeechProviderError
 
 from .models import Conversation, Message
 from django.utils import timezone
@@ -2095,3 +2098,316 @@ class MessageDetailAPITestCase(APITestCase):
                 id=self.other_message.id
             ).exists()
         )
+
+
+class TextToSpeechAPITestCase(APITestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="ttstestuser",
+            email="ttstest@example.com",
+            password="StrongPass123",
+        )
+
+        self.client.force_authenticate(
+            user=self.user,
+        )
+    @patch(
+        "conversations.views.AIConversationService.__init__",
+        return_value=None,
+    )
+    @patch(
+        "conversations.views.AIConversationService.synthesize_speech"
+    )
+    def test_text_to_speech_returns_wav_audio(
+        self,
+        mock_synthesize_speech,
+        mock_service_init,
+    ):
+        mock_synthesize_speech.return_value = (
+            b"RIFFmockwavdata"
+        )
+
+        response = self.client.post(
+            "/api/conversations/text-to-speech/",
+            {
+                "text": "Hello world",
+                "language": "en",
+                "voice": "Kore",
+            },
+            format="json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_200_OK,
+        )
+
+        self.assertEqual(
+            response["Content-Type"],
+            "audio/wav",
+        )
+
+        self.assertEqual(
+            response.content,
+            b"RIFFmockwavdata",
+        )
+
+        mock_synthesize_speech.assert_called_once_with(
+            "Hello world",
+            language="en",
+            voice="Kore",
+        )
+
+    @patch(
+        "conversations.views.AIConversationService.__init__",
+        return_value=None,
+    )
+    @patch(
+        "conversations.views.AIConversationService.synthesize_speech"
+    )
+    def test_text_to_speech_strips_text_language_and_voice(
+        self,
+        mock_synthesize_speech,
+        mock_service_init,
+    ):
+        mock_synthesize_speech.return_value = (
+            b"RIFFmockwavdata"
+        )
+
+        response = self.client.post(
+            "/api/conversations/text-to-speech/",
+            {
+                "text": "  Hello world  ",
+                "language": " en ",
+                "voice": " Kore ",
+            },
+            format="json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_200_OK,
+        )
+
+        mock_synthesize_speech.assert_called_once_with(
+            "Hello world",
+            language="en",
+            voice="Kore",
+        )
+
+    @patch(
+        "conversations.views.AIConversationService.__init__",
+        return_value=None,
+    )
+    @patch(
+        "conversations.views.AIConversationService.synthesize_speech"
+    )
+    def test_text_to_speech_allows_optional_language_and_voice(
+        self,
+        mock_synthesize_speech,
+        mock_service_init,
+    ):
+        mock_synthesize_speech.return_value = (
+            b"RIFFmockwavdata"
+        )
+
+        response = self.client.post(
+            "/api/conversations/text-to-speech/",
+            {
+                "text": "Hello world",
+            },
+            format="json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_200_OK,
+        )
+
+        mock_synthesize_speech.assert_called_once_with(
+            "Hello world",
+            language=None,
+            voice=None,
+        )
+
+    def test_text_to_speech_rejects_empty_text(self):
+        response = self.client.post(
+            "/api/conversations/text-to-speech/",
+            {
+                "text": "",
+            },
+            format="json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_400_BAD_REQUEST,
+        )
+
+        self.assertIn(
+            "text",
+            response.data,
+        )
+
+    def test_text_to_speech_rejects_whitespace_text(self):
+        response = self.client.post(
+            "/api/conversations/text-to-speech/",
+            {
+                "text": "   ",
+            },
+            format="json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_400_BAD_REQUEST,
+        )
+
+        self.assertIn(
+            "text",
+            response.data,
+        )
+
+    def test_text_to_speech_rejects_empty_language(self):
+        response = self.client.post(
+            "/api/conversations/text-to-speech/",
+            {
+                "text": "Hello world",
+                "language": "",
+            },
+            format="json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_400_BAD_REQUEST,
+        )
+
+        self.assertEqual(
+            response.data["language"][0],
+            "Language cannot be empty.",
+        )
+
+    def test_text_to_speech_rejects_whitespace_language(self):
+        response = self.client.post(
+            "/api/conversations/text-to-speech/",
+            {
+                "text": "Hello world",
+                "language": "   ",
+            },
+            format="json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_400_BAD_REQUEST,
+        )
+
+        self.assertEqual(
+            response.data["language"][0],
+            "Language cannot be empty.",
+        )
+
+    def test_text_to_speech_rejects_empty_voice(self):
+        response = self.client.post(
+            "/api/conversations/text-to-speech/",
+            {
+                "text": "Hello world",
+                "voice": "",
+            },
+            format="json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_400_BAD_REQUEST,
+        )
+
+        self.assertEqual(
+            response.data["voice"][0],
+            "Voice cannot be empty.",
+        )
+
+    def test_text_to_speech_rejects_whitespace_voice(self):
+        response = self.client.post(
+            "/api/conversations/text-to-speech/",
+            {
+                "text": "Hello world",
+                "voice": "   ",
+            },
+            format="json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_400_BAD_REQUEST,
+        )
+
+        self.assertEqual(
+            response.data["voice"][0],
+            "Voice cannot be empty.",
+        )
+
+    @patch(
+        "conversations.views.AIConversationService.__init__",
+        return_value=None,
+    )
+    @patch(
+        "conversations.views.AIConversationService.synthesize_speech"
+    )
+    def test_text_to_speech_returns_provider_error(
+        self,
+        mock_synthesize_speech,
+        mock_service_init,
+    ):
+        mock_synthesize_speech.side_effect = (
+            TextToSpeechProviderError(
+                "TTS provider failed"
+            )
+        )
+
+        response = self.client.post(
+            "/api/conversations/text-to-speech/",
+            {
+                "text": "Hello world",
+                "language": "en",
+                "voice": "Kore",
+            },
+            format="json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_500_INTERNAL_SERVER_ERROR,
+        )
+
+        self.assertEqual(
+            response.data,
+            {
+                "error": {
+                    "code": "text_to_speech_provider_error",
+                    "message": (
+                        "Text-to-speech service is currently unavailable."
+                    ),
+                }
+            },
+        )
+
+    def test_text_to_speech_requires_authentication(self):
+        self.client.force_authenticate(
+            user=None,
+        )
+
+        response = self.client.post(
+            "/api/conversations/text-to-speech/",
+            {
+                "text": "Hello world",
+            },
+            format="json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_401_UNAUTHORIZED,
+        )
+

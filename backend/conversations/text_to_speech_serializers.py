@@ -10,13 +10,13 @@ class TextToSpeechSerializer(serializers.Serializer):
 
     language = serializers.CharField(
         required=False,
-        allow_blank=False,
+        allow_blank=True,
         allow_null=False,
     )
 
     voice = serializers.CharField(
         required=False,
-        allow_blank=False,
+        allow_blank=True,
         allow_null=False,
     )
 

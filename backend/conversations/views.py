@@ -12,6 +12,7 @@ from .text_to_speech_serializers import TextToSpeechSerializer
 from .translation_serializers import TranslationSerializer
 from .models import Conversation, Message
 from django.utils import timezone
+from django.http import HttpResponse
 from rest_framework.response import Response
 from rest_framework import status
 from conversations.services.ai_conversation_service import (
@@ -434,9 +435,7 @@ class TextToSpeechAPIView(generics.GenericAPIView):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
-        return Response(
-            {
-                "audio": audio_data,
-            },
-            status=status.HTTP_200_OK,
+        return HttpResponse(
+            audio_data,
+            content_type="audio/wav",
         )     
