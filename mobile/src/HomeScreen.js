@@ -25,6 +25,7 @@ import {
 } from './conversations';
 
 import ConversationScreen from './ConversationScreen';
+import WhatsAppScreen from './WhatsAppScreen';
 
 import {
   clearTokens,
@@ -39,8 +40,8 @@ export default function HomeScreen({ onLogout }) {
     useState(false);
   const [languages, setLanguages] =
     useState([]);
-  const [showVoiceLanguagePicker, setShowVoiceLanguagePicker] = 
-    useState(false);    
+  const [showVoiceLanguagePicker, setShowVoiceLanguagePicker] =
+    useState(false);
 
   const [profileForm, setProfileForm] = useState({
     first_name: '',
@@ -49,6 +50,7 @@ export default function HomeScreen({ onLogout }) {
     voice_language: '',
     timezone: '',
   });
+
   const [userPreferences, setUserPreferences] = useState({
     preferred_language: '',
     voice_language: '',
@@ -57,8 +59,9 @@ export default function HomeScreen({ onLogout }) {
 
   const [isSavingProfile, setIsSavingProfile] =
     useState(false);
+
   const [showPreferredLanguagePicker, setShowPreferredLanguagePicker] =
-    useState(false); 
+    useState(false);
 
   const [conversations, setConversations] =
     useState([]);
@@ -80,6 +83,9 @@ export default function HomeScreen({ onLogout }) {
 
   const [selectedConversation, setSelectedConversation] =
     useState(null);
+
+  const [showWhatsApp, setShowWhatsApp] =
+    useState(false);
 
   const [creatingConversation, setCreatingConversation] =
     useState(false);
@@ -207,13 +213,14 @@ export default function HomeScreen({ onLogout }) {
         setUser(data);
 
         try {
-          const languageData = 
+          const languageData =
             await getLanguages();
+
           setLanguages(
             Array.isArray(languageData)
               ? languageData
               : []
-          );  
+          );
         } catch (languageError) {
           console.warn(
             'Unable to load languages:',
@@ -225,7 +232,11 @@ export default function HomeScreen({ onLogout }) {
           const profile = await getProfile(
             token
           );
-          console.log('User profile preferences:', profile);
+
+          console.log(
+            'User profile preferences:',
+            profile
+          );
 
           setProfileForm({
             first_name:
@@ -239,10 +250,14 @@ export default function HomeScreen({ onLogout }) {
             timezone:
               profile.timezone || '',
           });
+
           setUserPreferences({
-            preferred_language: profile.preferred_language || '',
-            voice_language: profile.voice_language || '',
-            timezone: profile.timezone || '',
+            preferred_language:
+              profile.preferred_language || '',
+            voice_language:
+              profile.voice_language || '',
+            timezone:
+              profile.timezone || '',
           });
         } catch (profileError) {
           console.warn(
@@ -293,8 +308,9 @@ export default function HomeScreen({ onLogout }) {
     ) {
       return `${language.name} (${language.native_name})`;
     }
+
     return language.name;
-  }
+  };
 
   /*
    * Cancel profile editing.
@@ -345,14 +361,15 @@ export default function HomeScreen({ onLogout }) {
           token,
           updates
         );
-        setUserPreferences({
-          preferred_language:
-            updateProfile.preferred_language || '',
-          voice_language:
-            updatedProfile.voice_language || '',
-          timezone:
-            updatedProfile.timezone || '',
-        });
+
+      setUserPreferences({
+        preferred_language:
+          updatedProfile.preferred_language || '',
+        voice_language:
+          updatedProfile.voice_language || '',
+        timezone:
+          updatedProfile.timezone || '',
+      });
 
       setProfileForm({
         first_name:
@@ -927,6 +944,21 @@ export default function HomeScreen({ onLogout }) {
     handleRestore(conversation);
   };
 
+  /*
+   * Open WhatsApp Assistant.
+   */
+  const handleOpenWhatsApp = () => {
+    setError('');
+    setShowWhatsApp(true);
+  };
+
+  /*
+   * Return from WhatsApp Assistant.
+   */
+  const handleCloseWhatsApp = () => {
+    setShowWhatsApp(false);
+  };
+
   if (selectedConversation) {
     return (
       <ConversationScreen
@@ -934,9 +966,20 @@ export default function HomeScreen({ onLogout }) {
         preferredLanguage={
           userPreferences.preferred_language
         }
-        onBack={() => 
+        onBack={() =>
           setSelectedConversation(null)
         }
+      />
+    );
+  }
+
+  if (showWhatsApp) {
+    return (
+      <WhatsAppScreen
+        preferredLanguage={
+          userPreferences.preferred_language
+        }
+        onBack={handleCloseWhatsApp}
       />
     );
   }
@@ -1118,52 +1161,74 @@ export default function HomeScreen({ onLogout }) {
 
             <Pressable
               style={styles.languageSelector}
-              onPress={() => 
+              onPress={() =>
                 setShowPreferredLanguagePicker(
                   (current) => !current
                 )
               }
               disabled={isSavingProfile}
             >
-            <Text style={styles.languageSelectorText}>
-              {getLanguageLabel(
-                profileForm.preferred_language
-              )}
-            </Text>
+              <Text
+                style={
+                  styles.languageSelectorText
+                }
+              >
+                {getLanguageLabel(
+                  profileForm.preferred_language
+                )}
+              </Text>
 
-            <Text style={styles.languageSelectorArrow}>
-              {showPreferredLanguagePicker
-                ? '▲'
-                : '▼'}
-            </Text>
+              <Text
+                style={
+                  styles.languageSelectorArrow
+                }
+              >
+                {showPreferredLanguagePicker
+                  ? '▲'
+                  : '▼'}
+              </Text>
             </Pressable>
 
             {showPreferredLanguagePicker ? (
-              <View style={styles.languageOptions}>
+              <View
+                style={
+                  styles.languageOptions
+                }
+              >
                 {languages.map((language) => (
                   <Pressable
-                key={language.id}
-                style={styles.languageOption}
-                onPress={() => {
-                  handleProfileFieldChange(
-                    'preferred_language',
-                    language.code
-                  );
+                    key={language.id}
+                    style={
+                      styles.languageOption
+                    }
+                    onPress={() => {
+                      handleProfileFieldChange(
+                        'preferred_language',
+                        language.code
+                      );
 
-                  setShowPreferredLanguagePicker(
-                    false
-                  );
-                }}
-                >
-                  <Text style={styles.languageOptionName}>
-                    {language.name}
-                  </Text>
+                      setShowPreferredLanguagePicker(
+                        false
+                      );
+                    }}
+                  >
+                    <Text
+                      style={
+                        styles.languageOptionName
+                      }
+                    >
+                      {language.name}
+                    </Text>
 
-                  <Text style={styles.languageOptionNative}>
-                    {language.native_name}
-                  </Text>
-                </Pressable>
-              ))}
+                    <Text
+                      style={
+                        styles.languageOptionNative
+                      }
+                    >
+                      {language.native_name}
+                    </Text>
+                  </Pressable>
+                ))}
               </View>
             ) : null}
 
@@ -1173,20 +1238,28 @@ export default function HomeScreen({ onLogout }) {
 
             <Pressable
               style={styles.languageSelector}
-              onPress={() => 
+              onPress={() =>
                 setShowVoiceLanguagePicker(
                   (current) => !current
                 )
               }
-              disabled={isSavingProfile}   
+              disabled={isSavingProfile}
             >
-              <Text style={styles.languageSelectorText}>
+              <Text
+                style={
+                  styles.languageSelectorText
+                }
+              >
                 {getLanguageLabel(
                   profileForm.voice_language
                 )}
               </Text>
 
-              <Text style={styles.languageSelectorArrow}>
+              <Text
+                style={
+                  styles.languageSelectorArrow
+                }
+              >
                 {showVoiceLanguagePicker
                   ? '▲'
                   : '▼'}
@@ -1194,11 +1267,17 @@ export default function HomeScreen({ onLogout }) {
             </Pressable>
 
             {showVoiceLanguagePicker ? (
-              <View style={styles.languageOptions}>
+              <View
+                style={
+                  styles.languageOptions
+                }
+              >
                 {languages.map((language) => (
                   <Pressable
                     key={language.id}
-                    style={styles.languageOption}
+                    style={
+                      styles.languageOption
+                    }
                     onPress={() => {
                       handleProfileFieldChange(
                         'voice_language',
@@ -1210,11 +1289,19 @@ export default function HomeScreen({ onLogout }) {
                       );
                     }}
                   >
-                    <Text style={styles.languageOptionName}>
+                    <Text
+                      style={
+                        styles.languageOptionName
+                      }
+                    >
                       {language.name}
                     </Text>
 
-                    <Text style={styles.languageOptionNative}>
+                    <Text
+                      style={
+                        styles.languageOptionNative
+                      }
+                    >
                       {language.native_name}
                     </Text>
                   </Pressable>
@@ -1300,6 +1387,36 @@ export default function HomeScreen({ onLogout }) {
             </View>
           </>
         )}
+      </View>
+
+      {/* WHATSAPP ASSISTANT */}
+      <View style={styles.card}>
+        <Text style={styles.cardTitle}>
+          WhatsApp Assistant
+        </Text>
+
+        <Text style={styles.communicationDescription}>
+          Prepare WhatsApp messages with an
+          AI-generated reply in your preferred
+          language.
+        </Text>
+
+        <Pressable
+          style={styles.whatsappButton}
+          onPress={handleOpenWhatsApp}
+        >
+          <Text
+            style={
+              styles.whatsappButtonText
+            }
+          >
+            Open WhatsApp Assistant
+          </Text>
+        </Pressable>
+
+        <Text style={styles.communicationHint}>
+          WhatsApp sending is not connected yet.
+        </Text>
       </View>
 
       {/* NEW CONVERSATION */}
@@ -1692,17 +1809,17 @@ const styles = StyleSheet.create({
   },
 
   languageSelector: {
-  minHeight: 50,
-  borderWidth: 1,
-  borderColor: '#d1d5db',
-  borderRadius: 12,
-  paddingHorizontal: 15,
-  paddingVertical: 12,
-  backgroundColor: '#ffffff',
-  marginBottom: 6,
-  flexDirection: 'row',
-  alignItems: 'center',
-  justifyContent: 'space-between',
+    minHeight: 50,
+    borderWidth: 1,
+    borderColor: '#d1d5db',
+    borderRadius: 12,
+    paddingHorizontal: 15,
+    paddingVertical: 12,
+    backgroundColor: '#ffffff',
+    marginBottom: 6,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
   },
 
   languageSelectorText: {
@@ -1800,6 +1917,37 @@ const styles = StyleSheet.create({
     fontSize: 16,
     backgroundColor: '#ffffff',
     marginBottom: 16,
+  },
+
+  /*
+   * WhatsApp Assistant styles.
+   */
+  communicationDescription: {
+    fontSize: 14,
+    lineHeight: 20,
+    color: '#4b5563',
+    marginBottom: 16,
+  },
+
+  whatsappButton: {
+    backgroundColor: '#2563eb',
+    borderRadius: 12,
+    paddingVertical: 16,
+  },
+
+  whatsappButtonText: {
+    color: '#ffffff',
+    fontSize: 15,
+    fontWeight: '700',
+    textAlign: 'center',
+  },
+
+  communicationHint: {
+    marginTop: 9,
+    fontSize: 12,
+    lineHeight: 18,
+    color: '#9ca3af',
+    textAlign: 'center',
   },
 
   createButton: {
