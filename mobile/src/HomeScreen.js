@@ -7,6 +7,7 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TouchableOpacity,
   TextInput,
   View,
 } from 'react-native';
@@ -26,6 +27,7 @@ import {
 
 import ConversationScreen from './ConversationScreen';
 import WhatsAppScreen from './WhatsAppScreen';
+import PhoneCallScreen from './PhoneCallScreen';
 
 import {
   clearTokens,
@@ -86,6 +88,8 @@ export default function HomeScreen({ onLogout }) {
 
   const [showWhatsApp, setShowWhatsApp] =
     useState(false);
+  
+  const [showPhoneCall, setShowPhoneCall] = useState(false);  
 
   const [creatingConversation, setCreatingConversation] =
     useState(false);
@@ -104,7 +108,7 @@ export default function HomeScreen({ onLogout }) {
 
   const [conversationActionId, setConversationActionId] =
     useState(null);
-
+   
   /*
    * Normalize conversation objects coming from the API.
    */
@@ -952,11 +956,20 @@ export default function HomeScreen({ onLogout }) {
     setShowWhatsApp(true);
   };
 
+  const handleOpenPhoneCall = () => {
+    setError('');
+    setShowPhoneCall(true);
+  };
+
   /*
    * Return from WhatsApp Assistant.
    */
   const handleCloseWhatsApp = () => {
     setShowWhatsApp(false);
+  };
+
+  const handleClosePhoneCall = () => {
+    setShowPhoneCall(false);
   };
 
   if (selectedConversation) {
@@ -981,6 +994,17 @@ export default function HomeScreen({ onLogout }) {
         }
         onBack={handleCloseWhatsApp}
       />
+    );
+  }
+
+  if (showPhoneCall) {
+    return (
+      <PhoneCallScreen
+        preferredLanguage={
+          userPreferences.preferred_language
+        }
+        onBack={handleClosePhoneCall}
+      />  
     );
   }
 
@@ -1416,6 +1440,30 @@ export default function HomeScreen({ onLogout }) {
 
         <Text style={styles.communicationHint}>
           WhatsApp sending is not connected yet.
+        </Text>
+      </View>
+
+      <View style={styles.communicationCard}>
+        <Text style={styles.communicationTitle}>
+          Phone Call Assistant
+        </Text>
+
+        <Text style={styles.communicationDescription}>
+          Prepare AI-assisted responses for
+          phone conversations.
+        </Text>
+
+        <TouchableOpacity
+          style={styles.phoneCallButton}
+          onPress={handleOpenPhoneCall}
+        >
+          <Text style={styles.phoneCallButtonText}>
+            Open Phone Call Assistant
+          </Text>
+        </TouchableOpacity>
+
+        <Text style={styles.communicationHint}>
+          Phone calling is not connected yet.
         </Text>
       </View>
 
@@ -1940,6 +1988,19 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '700',
     textAlign: 'center',
+  },
+
+  phoneCallButton: {
+    minHeight: 44,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 10,
+  },
+
+  phoneCallButtonText: {
+    fontSize: 15,
+    fontWeight: '600',
   },
 
   communicationHint: {
