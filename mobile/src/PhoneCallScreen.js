@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -10,7 +11,10 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+
 import * as Clipboard from 'expo-clipboard';
+
+import NotificationBanner from './NotificationBanner';
 
 const PhoneCallScreen = ({
   preferredLanguage,
@@ -19,21 +23,42 @@ const PhoneCallScreen = ({
   const [recipient, setRecipient] = useState('');
   const [recipientError, setRecipientError] =
     useState('');
-
   const [callStatus, setCallStatus] =
     useState('ready');
-
   const [suggestedReply, setSuggestedReply] =
     useState('');
-
   const [copying, setCopying] =
     useState(false);
-
   const [error, setError] =
     useState('');
+  const [notification, setNotification] =
+    useState({
+      visible: false,
+      type: 'info',
+      message: '',
+    });
 
   const activeLanguage =
     preferredLanguage?.trim() || 'en';
+
+  const showNotification = (
+    message,
+    type = 'info'
+  ) => {
+    setNotification({
+      visible: true,
+      type,
+      message,
+    });
+  };
+
+  const dismissNotification = () => {
+    setNotification({
+      visible: false,
+      type: 'info',
+      message: '',
+    });
+  };
 
   const handleRecipientChange = (value) => {
     setRecipient(value);
@@ -69,6 +94,10 @@ const PhoneCallScreen = ({
       setRecipientError(
         'Please enter a phone number.'
       );
+      showNotification(
+        'Please enter a phone number.',
+        'error'
+      );
       return;
     }
 
@@ -80,17 +109,33 @@ const PhoneCallScreen = ({
       setRecipientError(
         'Please enter a valid phone number with country code.'
       );
+      showNotification(
+        'Please enter a valid phone number with country code.',
+        'error'
+      );
       return;
     }
 
     setRecipientError('');
     setCallStatus('connecting');
+    setError('');
+
+    showNotification(
+      'Connecting to phone call...',
+      'info'
+    );
 
     setTimeout(() => {
       setCallStatus('ready');
 
-      setError(
-        'Phone calling is not connected yet.'
+      const callError =
+        'Phone calling is not connected yet.';
+
+      setError(callError);
+
+      showNotification(
+        callError,
+        'error'
       );
     }, 1500);
   };
@@ -106,13 +151,33 @@ const PhoneCallScreen = ({
       await Clipboard.setStringAsync(
         suggestedReply
       );
+
+      showNotification(
+        'AI suggestion copied successfully.',
+        'success'
+      );
     } catch (copyError) {
-      setError(
-        'Unable to copy the AI suggestion.'
+      const copyErrorMessage =
+        'Unable to copy the AI suggestion.';
+
+      setError(copyErrorMessage);
+
+      showNotification(
+        copyErrorMessage,
+        'error'
       );
     } finally {
       setCopying(false);
     }
+  };
+
+  const handleUseSuggestion = () => {
+    setError('');
+
+    showNotification(
+      'AI suggestion is ready to use.',
+      'success'
+    );
   };
 
   const getStatusText = () => {
@@ -137,17 +202,29 @@ const PhoneCallScreen = ({
           : undefined
       }
     >
+      <NotificationBanner
+        visible={notification.visible}
+        type={notification.type}
+        message={notification.message}
+        onDismiss={dismissNotification}
+      />
+
       <View style={styles.header}>
         <TouchableOpacity
           style={styles.backButton}
           onPress={onBack}
+          accessibilityRole="button"
+          accessibilityLabel="Go back"
         >
           <Text style={styles.backButtonText}>
             ←
           </Text>
         </TouchableOpacity>
 
-        <Text style={styles.headerTitle}>
+        <Text
+          style={styles.headerTitle}
+          accessibilityRole="header"
+        >
           Phone Call Assistant
         </Text>
       </View>
@@ -177,6 +254,8 @@ const PhoneCallScreen = ({
             editable={
               callStatus !== 'connecting'
             }
+            accessibilityLabel="Phone number"
+            accessibilityHint="Enter the phone number you want to call"
             style={[
               styles.input,
               recipientError &&
@@ -196,7 +275,11 @@ const PhoneCallScreen = ({
             Communication language
           </Text>
 
-          <View style={styles.languageBox}>
+          <View
+            style={styles.languageBox}
+            accessible
+            accessibilityLabel={`AI response language ${activeLanguage}`}
+          >
             <Text style={styles.languageLabel}>
               AI response language
             </Text>
@@ -217,10 +300,15 @@ const PhoneCallScreen = ({
             Call status
           </Text>
 
-          <View style={styles.statusRow}>
+          <View
+            style={styles.statusRow}
+            accessible
+            accessibilityLabel={`Call status: ${getStatusText()}`}
+          >
             {callStatus === 'connecting' ? (
               <ActivityIndicator
                 size="small"
+                accessibilityLabel="Connecting"
               />
             ) : null}
 
@@ -239,10 +327,19 @@ const PhoneCallScreen = ({
             disabled={
               callStatus === 'connecting'
             }
+            accessibilityRole="button"
+            accessibilityLabel="Start phone call"
+            accessibilityState={{
+              disabled:
+                callStatus === 'connecting',
+              busy:
+                callStatus === 'connecting',
+            }}
           >
             {callStatus === 'connecting' ? (
               <ActivityIndicator
                 size="small"
+                color="#fff"
               />
             ) : (
               <Text
@@ -257,7 +354,11 @@ const PhoneCallScreen = ({
         </View>
 
         {error ? (
-          <View style={styles.errorCard}>
+          <View
+            style={styles.errorCard}
+            accessible
+            accessibilityRole="alert"
+          >
             <Text style={styles.errorText}>
               {error}
             </Text>
@@ -265,7 +366,10 @@ const PhoneCallScreen = ({
         ) : null}
 
         <View style={styles.card}>
-          <Text style={styles.sectionTitle}>
+          <Text
+            style={styles.sectionTitle}
+            accessibilityRole="header"
+          >
             AI Suggested Response
           </Text>
 
@@ -273,6 +377,8 @@ const PhoneCallScreen = ({
             <>
               <View
                 style={styles.suggestionBox}
+                accessible
+                accessibilityLabel="AI suggested response"
               >
                 <Text
                   style={
@@ -290,6 +396,12 @@ const PhoneCallScreen = ({
                   style={styles.actionButton}
                   onPress={handleCopy}
                   disabled={copying}
+                  accessibilityRole="button"
+                  accessibilityLabel="Copy AI suggestion"
+                  accessibilityState={{
+                    disabled: copying,
+                    busy: copying,
+                  }}
                 >
                   {copying ? (
                     <ActivityIndicator
@@ -308,9 +420,11 @@ const PhoneCallScreen = ({
 
                 <TouchableOpacity
                   style={styles.actionButton}
-                  onPress={() => {
-                    setError('');
-                  }}
+                  onPress={
+                    handleUseSuggestion
+                  }
+                  accessibilityRole="button"
+                  accessibilityLabel="Use AI suggestion"
                 >
                   <Text
                     style={
@@ -323,7 +437,11 @@ const PhoneCallScreen = ({
               </View>
             </>
           ) : (
-            <View style={styles.emptyState}>
+            <View
+              style={styles.emptyState}
+              accessible
+              accessibilityLabel="No AI suggested response available"
+            >
               <Text
                 style={styles.emptyStateText}
               >
@@ -339,13 +457,12 @@ const PhoneCallScreen = ({
         <View style={styles.comingSoonCard}>
           <Text
             style={styles.comingSoonTitle}
+            accessibilityRole="header"
           >
             Phone calling
           </Text>
 
-          <Text
-            style={styles.comingSoonText}
-          >
+          <Text style={styles.comingSoonText}>
             Phone calling integration is
             coming later. This screen currently
             provides the communication UI only.
@@ -355,6 +472,8 @@ const PhoneCallScreen = ({
         <TouchableOpacity
           style={styles.backBottomButton}
           onPress={onBack}
+          accessibilityRole="button"
+          accessibilityLabel="Go back to home"
         >
           <Text
             style={styles.backBottomButtonText}
@@ -384,8 +503,8 @@ const styles = StyleSheet.create({
   },
 
   backButton: {
-    width: 40,
-    height: 40,
+    width: 44,
+    height: 44,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 8,

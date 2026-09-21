@@ -149,7 +149,13 @@ export async function streamAIMessage(
     throw new Error(
       'AI service is temporarily unavailable. Please try again later.'
     );
-    }
+  }
 
-    return completedText;
+  if (!completedText.trim()) {
+    throw new Error(
+      'The AI returned an empty response. Please try again.'
+    );
+  }
+
+  return completedText;
 }

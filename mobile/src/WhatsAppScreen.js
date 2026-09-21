@@ -15,6 +15,7 @@ import {
 } from 'react-native';
 
 import * as Clipboard from 'expo-clipboard';
+import NotificationBanner from './NotificationBanner';
 
 import {
   createConversation,
@@ -49,6 +50,11 @@ export default function WhatsAppScreen({
 
   const [error, setError] =
     useState('');
+  const [notification, setNotification] = useState({
+    visible: false,
+    type: 'info',
+    message: '',
+  }); 
 
   const [recipientError, setRecipientError] =
     useState('');
@@ -83,6 +89,24 @@ export default function WhatsAppScreen({
 
     setRecipientError('');
     };
+  const showNotification = (
+    message,
+    type = 'info'
+  ) => {
+    setNotification({
+        visible: true,
+        type,
+        message,
+    });
+  };
+  
+  const dismissNotification = () => {
+    setNotification({
+        visible: false,
+        type: 'info',
+        message: '',
+    });
+  };
 
   const handleMessageChange = (value) => {
     setMessageText(value);
@@ -218,6 +242,11 @@ export default function WhatsAppScreen({
         setSuggestedReply(
           generatedReply
         );
+
+        showNotification(
+            'AI reply generated successfully.',
+            'success'
+        );
       } catch (error) {
         setSuggestedReply('');
 
@@ -225,8 +254,15 @@ export default function WhatsAppScreen({
           error?.message ||
             'Unable to generate an AI reply. Please try again.'
         );
+
+        showNotification(
+          error?.message ||
+            'Unable to generate an AI reply. Please try again.',
+          'error'
+        );
       } finally {
         setLoading(false);
+        setGenerationStarted(false);
       }
     };
 
@@ -466,6 +502,13 @@ export default function WhatsAppScreen({
           : undefined
       }
     >
+      <NotificationBanner
+        visible={notification.visible} 
+        type={notification.type}
+        message={notification.message}
+        onDismiss={dismissNotification}
+      />
+
       <View style={styles.header}>
         <Pressable
           style={styles.backButton}
