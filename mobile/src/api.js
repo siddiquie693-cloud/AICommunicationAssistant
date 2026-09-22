@@ -10,18 +10,50 @@ import {
 
 let refreshPromise = null;
 
-const LOGIN_ENDPOINT = '/api/auth/login/';
-const REFRESH_ENDPOINT = '/api/auth/refresh/';
+const LOGIN_ENDPOINT =
+  '/api/auth/login/';
 
-function isAuthenticationEndpoint(endpoint) {
+const REFRESH_ENDPOINT =
+  '/api/auth/refresh/';
+
+function isAuthenticationEndpoint(
+  endpoint
+) {
   return (
     endpoint === LOGIN_ENDPOINT ||
     endpoint === REFRESH_ENDPOINT
   );
 }
 
+function createNetworkError() {
+  return new Error(
+    'No internet connection. Please check your network and try again.'
+  );
+}
+
+function isNetworkError(error) {
+  if (!error) {
+    return false;
+  }
+
+  if (error.name === 'TypeError') {
+    return true;
+  }
+
+  const message =
+    error.message?.toLowerCase() || '';
+
+  return (
+    message.includes('network request failed') ||
+    message.includes('network error') ||
+    message.includes('failed to fetch') ||
+    message.includes('fetch failed')
+  );
+}
+
 async function parseResponse(response) {
-  const responseText = await response.text();
+  const responseText =
+    await response.text();
 
   let data = null;
 
@@ -49,19 +81,28 @@ async function performRequest(
   };
 
   if (token) {
-    headers.Authorization = `Bearer ${token}`;
+    headers.Authorization =
+      `Bearer ${token}`;
   }
 
-  return fetch(
-    `${API_BASE_URL}${endpoint}`,
-    {
-      method,
-      headers,
-      body: body
-        ? JSON.stringify(body)
-        : undefined,
+  try {
+    return await fetch(
+      `${API_BASE_URL}${endpoint}`,
+      {
+        method,
+        headers,
+        body: body
+          ? JSON.stringify(body)
+          : undefined,
+      }
+    );
+  } catch (error) {
+    if (isNetworkError(error)) {
+      throw createNetworkError();
     }
-  );
+
+    throw error;
+  }
 }
 
 async function refreshAccessTokenOnce() {
@@ -108,7 +149,8 @@ async function refreshAccessTokenOnce() {
       }
 
       const newRefreshToken =
-        data?.refresh || refreshToken;
+        data?.refresh ||
+        refreshToken;
 
       await saveTokens(
         data.access,
@@ -149,28 +191,37 @@ export async function apiRequest(
 ) {
   let accessToken = token;
 
-  /*
-   * Never attach a previously stored access token
-   * to the login or refresh endpoints.
-   */
   if (
     !isAuthenticationEndpoint(endpoint) &&
     !accessToken
   ) {
-    accessToken = await getAccessToken();
+    accessToken =
+      await getAccessToken();
   }
 
-  let response = await performRequest(
-    endpoint,
-    {
-      method,
-      body,
-      token:
-        isAuthenticationEndpoint(endpoint)
-          ? null
-          : accessToken,
+  let response;
+
+  try {
+    response = await performRequest(
+      endpoint,
+      {
+        method,
+        body,
+        token:
+          isAuthenticationEndpoint(
+            endpoint
+          )
+            ? null
+            : accessToken,
+      }
+    );
+  } catch (error) {
+    if (isNetworkError(error)) {
+      throw createNetworkError();
     }
-  );
+
+    throw error;
+  }
 
   const shouldRefresh =
     response.status === 401 &&
@@ -182,15 +233,20 @@ export async function apiRequest(
       const newAccessToken =
         await refreshAccessTokenOnce();
 
-      response = await performRequest(
-        endpoint,
-        {
-          method,
-          body,
-          token: newAccessToken,
-        }
-      );
+      response =
+        await performRequest(
+          endpoint,
+          {
+            method,
+            body,
+            token: newAccessToken,
+          }
+        );
     } catch (error) {
+      if (isNetworkError(error)) {
+        throw createNetworkError();
+      }
+
       await clearTokens();
 
       notifySessionExpired();
@@ -200,17 +256,13 @@ export async function apiRequest(
       );
     }
 
-    /*
-     * The refresh succeeded, but the retried request
-     * was still rejected. Treat the local session as
-     * invalid rather than leaving stale credentials.
-     */
     if (response.status === 401) {
       return handleExpiredSession();
     }
   }
 
-  const data = await parseResponse(response);
+  const data =
+    await parseResponse(response);
 
   if (!response.ok) {
     throw new Error(
