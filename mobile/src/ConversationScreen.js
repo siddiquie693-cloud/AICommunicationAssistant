@@ -32,7 +32,6 @@ import {
 } from 'expo-audio';
 
 import {
-  createMessage,
   deleteMessage,
   getMessages,
   streamAIMessage,
@@ -63,33 +62,35 @@ export default function ConversationScreen({
   );
 
   const ttsPlayer = useAudioPlayer(null);
-  const ttsPlayerStatus = useAudioPlayerStatus(ttsPlayer);
-  
-  const recorderState = useAudioRecorderState(
-    audioRecorder
-  );
+  const ttsPlayerStatus =
+    useAudioPlayerStatus(ttsPlayer);
 
-  console.log(
-    'CONVERSATION SCREEN PROP:',
-    conversation
-  );
-
-  console.log(
-    'PREFERRED LANGUAGE PROP:',
-    preferredLanguage
-  );
+  const recorderState =
+    useAudioRecorderState(
+      audioRecorder
+    );
 
   const [messages, setMessages] = useState([]);
-  const [messageText, setMessageText] = useState('');
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const [sending, setSending] = useState(false);
-  const [error, setError] = useState('');
-  const [playingMessageId, setPlayingMessageId] = useState(null);
-  const [voiceLoading, setVoiceLoading] = useState(false);
-  const [voiceError, setVoiceError] = useState('');
-  const [recording, setRecording] = useState(false);
-  const [transcribing, setTranscribing] = useState(false);
+  const [messageText, setMessageText] =
+    useState('');
+  const [loading, setLoading] =
+    useState(true);
+  const [refreshing, setRefreshing] =
+    useState(false);
+  const [sending, setSending] =
+    useState(false);
+  const [error, setError] =
+    useState('');
+  const [playingMessageId, setPlayingMessageId] =
+    useState(null);
+  const [voiceLoading, setVoiceLoading] =
+    useState(false);
+  const [voiceError, setVoiceError] =
+    useState('');
+  const [recording, setRecording] =
+    useState(false);
+  const [transcribing, setTranscribing] =
+    useState(false);
 
   const [
     requestingMicrophonePermission,
@@ -108,31 +109,153 @@ export default function ConversationScreen({
   const [deletingMessageId, setDeletingMessageId] =
     useState(null);
 
-  const handleVoicePress = async () => {
-    console.log('VOICE BUTTON PRESSED');
+  const flatListRef = useRef(null);
 
+  /*
+   * Streaming performance:
+   *
+   * AI providers can return many small chunks.
+   * Updating React state for every chunk causes
+   * unnecessary FlatList renders.
+   *
+   * These refs accumulate chunks and flush them
+   * to React at a controlled interval.
+   */
+  const streamingBufferRef = useRef('');
+  const streamingFlushTimerRef = useRef(null);
+  const streamingAssistantIdRef = useRef(null);
+
+  /*
+   * Scroll performance:
+   *
+   * The message list can change many times while
+   * an AI response streams. Throttle automatic
+   * scrolling so it does not execute for every
+   * rendered chunk.
+   */
+  const scrollTimerRef = useRef(null);
+
+  const clearStreamingFlushTimer =
+    useCallback(() => {
+      if (
+        streamingFlushTimerRef.current !== null
+      ) {
+        clearTimeout(
+          streamingFlushTimerRef.current
+        );
+
+        streamingFlushTimerRef.current =
+          null;
+      }
+    }, []);
+
+  const flushStreamingBuffer =
+    useCallback(() => {
+      const bufferedText =
+        streamingBufferRef.current;
+
+      const assistantId =
+        streamingAssistantIdRef.current;
+
+      if (
+        !bufferedText ||
+        !assistantId
+      ) {
+        return;
+      }
+
+      streamingBufferRef.current = '';
+
+      setMessages(
+        (currentMessages) =>
+          currentMessages.map(
+            (message) =>
+              message.id === assistantId
+                ? {
+                    ...message,
+                    content:
+                      message.content +
+                      bufferedText,
+                  }
+                : message
+          )
+      );
+    }, []);
+
+  const scheduleStreamingFlush =
+    useCallback(() => {
+      if (
+        streamingFlushTimerRef.current !==
+        null
+      ) {
+        return;
+      }
+
+      streamingFlushTimerRef.current =
+        setTimeout(() => {
+          streamingFlushTimerRef.current =
+            null;
+
+          flushStreamingBuffer();
+        }, 50);
+    }, [flushStreamingBuffer]);
+
+  const appendStreamingChunk =
+    useCallback(
+      (chunk) => {
+        if (!chunk) {
+          return;
+        }
+
+        streamingBufferRef.current += chunk;
+
+        scheduleStreamingFlush();
+      },
+      [scheduleStreamingFlush]
+    );
+
+  const clearStreamingState =
+    useCallback(() => {
+      clearStreamingFlushTimer();
+
+      streamingBufferRef.current = '';
+      streamingAssistantIdRef.current =
+        null;
+    }, [clearStreamingFlushTimer]);
+
+  const scrollToBottom = useCallback(
+    (animated = true) => {
+      if (
+        scrollTimerRef.current !== null
+      ) {
+        return;
+      }
+
+      scrollTimerRef.current =
+        setTimeout(() => {
+          scrollTimerRef.current = null;
+
+          flatListRef.current?.scrollToEnd({
+            animated,
+          });
+        }, 80);
+    },
+    []
+  );
+
+  const handleVoicePress = async () => {
     if (requestingMicrophonePermission) {
       return;
     }
 
-    // Stop recording and send the audio to STT.
     if (recorderState.isRecording) {
       try {
-        console.log(
-          'VOICE RECORDING STOPPING'
-        );
-
         await audioRecorder.stop();
 
         setRecording(false);
 
         const recordedUri =
           audioRecorder.uri;
-
-        console.log(
-          'VOICE RECORDING STOPPED:',
-          recordedUri
-        );
 
         if (!recordedUri) {
           throw new Error(
@@ -155,11 +278,6 @@ export default function ConversationScreen({
         const language =
           preferredLanguage || 'en';
 
-        console.log(
-          'SENDING AUDIO TO STT:',
-          language
-        );
-
         const transcription =
           await transcribeAudio(
             token,
@@ -167,14 +285,9 @@ export default function ConversationScreen({
             language
           );
 
-        console.log(
-          'STT TRANSCRIPTION:',
+        setMessageText(
           transcription
         );
-
-        // Put transcription into the input box.
-        // Do NOT send automatically.
-        setMessageText(transcription);
       } catch (err) {
         console.error(
           'VOICE / STT ERROR:',
@@ -199,7 +312,6 @@ export default function ConversationScreen({
       return;
     }
 
-    // Start recording.
     try {
       setRequestingMicrophonePermission(
         true
@@ -226,10 +338,6 @@ export default function ConversationScreen({
       audioRecorder.record();
 
       setRecording(true);
-
-      console.log(
-        'VOICE RECORDING STARTED'
-      );
     } catch (err) {
       console.error(
         'VOICE RECORDING ERROR:',
@@ -324,9 +432,7 @@ export default function ConversationScreen({
     } finally {
       setVoiceLoading(false);
     }
-  }; 
-
-  const flatListRef = useRef(null);
+  };
 
   const loadMessages = useCallback(
     async (showLoading = true) => {
@@ -380,37 +486,41 @@ export default function ConversationScreen({
     [conversation.id]
   );
 
-
   useEffect(() => {
     loadMessages(true);
   }, [loadMessages]);
 
   useEffect(() => {
-  if (
-    ttsPlayerStatus.didJustFinish &&
-    playingMessageId !== null
-  ) {
-    setPlayingMessageId(null);
-  }
-}, [
-  ttsPlayerStatus.didJustFinish,
-  playingMessageId,
-]);
+    if (
+      ttsPlayerStatus.didJustFinish &&
+      playingMessageId !== null
+    ) {
+      setPlayingMessageId(null);
+    }
+  }, [
+    ttsPlayerStatus.didJustFinish,
+    playingMessageId,
+  ]);
 
+  useEffect(() => {
+    return () => {
+      clearStreamingState();
 
-  const scrollToBottom = () => {
-    setTimeout(() => {
-      flatListRef.current?.scrollToEnd({
-        animated: true,
-      });
-    }, 100);
-  };
+      if (
+        scrollTimerRef.current !== null
+      ) {
+        clearTimeout(
+          scrollTimerRef.current
+        );
 
+        scrollTimerRef.current = null;
+      }
+    };
+  }, [clearStreamingState]);
 
   const handleRefresh = () => {
     loadMessages(false);
   };
-
 
   const handleCopyMessage =
     async (message) => {
@@ -431,7 +541,6 @@ export default function ConversationScreen({
       }
     };
 
-
   const handleEditMessage =
     (message) => {
       setEditingMessageId(
@@ -443,12 +552,10 @@ export default function ConversationScreen({
       );
     };
 
-
   const handleCancelEdit = () => {
     setEditingMessageId(null);
     setEditingText('');
   };
-
 
   const handleSaveEdit =
     async (message) => {
@@ -512,13 +619,12 @@ export default function ConversationScreen({
         Alert.alert(
           'Update failed',
           err?.message ||
-          'Unable to update message.'
+            'Unable to update message.'
         );
       } finally {
         setSavingMessageId(null);
       }
     };
-
 
   const handleDeleteMessage =
     (message) => {
@@ -570,7 +676,7 @@ export default function ConversationScreen({
                 Alert.alert(
                   'Delete failed',
                   err?.message ||
-                  'Unable to delete message.'
+                    'Unable to delete message.'
                 );
               } finally {
                 setDeletingMessageId(
@@ -582,7 +688,6 @@ export default function ConversationScreen({
         ]
       );
     };
-
 
   const handleMessageActions =
     (message) => {
@@ -634,7 +739,6 @@ export default function ConversationScreen({
       );
     };
 
-
   const handleSendMessage =
     async () => {
       const content =
@@ -657,6 +761,8 @@ export default function ConversationScreen({
       setError('');
       setMessageText('');
 
+      clearStreamingState();
+
       try {
         const token =
           await getAccessToken();
@@ -672,6 +778,9 @@ export default function ConversationScreen({
 
         const temporaryAssistantId =
           `temporary-assistant-${Date.now()}`;
+
+        streamingAssistantIdRef.current =
+          temporaryAssistantId;
 
         const temporaryUserMessage = {
           id: temporaryUserId,
@@ -699,37 +808,33 @@ export default function ConversationScreen({
           ]
         );
 
+        scrollToBottom();
+
         await streamAIMessage(
           token,
           conversation.id,
           content,
           preferredLanguage,
-          (chunk) => {
-            setMessages(
-              (currentMessages) =>
-                currentMessages.map(
-                  (message) =>
-                    message.id ===
-                    temporaryAssistantId
-                      ? {
-                          ...message,
-                          content:
-                            message.content +
-                            chunk,
-                        }
-                      : message
-                )
-            );
-          }
+          appendStreamingChunk
         );
 
         /*
-         * Streaming is complete.
-         * Fetch the authoritative message history
-         * from the backend and completely replace
-         * the temporary local messages.
+         * Make sure the final buffered
+         * streaming content is rendered
+         * before replacing it with the
+         * authoritative server response.
          */
+        clearStreamingFlushTimer();
 
+        flushStreamingBuffer();
+
+        /*
+         * Streaming is complete.
+         * Fetch the authoritative message
+         * history from the backend and
+         * completely replace the temporary
+         * local messages.
+         */
         const latestMessages =
           await getMessages(
             token,
@@ -754,6 +859,8 @@ export default function ConversationScreen({
 
         scrollToBottom();
       } catch (err) {
+        clearStreamingState();
+
         setMessageText(content);
 
         setMessages(
@@ -770,10 +877,10 @@ export default function ConversationScreen({
             'Unable to send message.'
         );
       } finally {
+        clearStreamingState();
         setSending(false);
       }
     };
-
 
   const renderMessage = ({
     item,
@@ -927,7 +1034,8 @@ export default function ConversationScreen({
                   disabled={voiceLoading}
                 >
                   {voiceLoading &&
-                  playingMessageId !== item.id ? (
+                  playingMessageId !==
+                    item.id ? (
                     <View
                       style={{
                         flexDirection: 'row',
@@ -1006,7 +1114,7 @@ export default function ConversationScreen({
             </View>
           )}
         </Pressable>
-      </View>   
+      </View>
     );
   };
 
@@ -1122,11 +1230,7 @@ export default function ConversationScreen({
         refreshing={refreshing}
         onRefresh={handleRefresh}
         onContentSizeChange={() => {
-          flatListRef.current?.scrollToEnd(
-            {
-              animated: true,
-            }
-          );
+          scrollToBottom();
         }}
         ListEmptyComponent={
           !error ? (
@@ -1161,13 +1265,13 @@ export default function ConversationScreen({
           styles.composerContainer
         }
       >
-      {voiceError ? (
-        <Text
-          styles={styles.voiceErrorText}
-        >
-          {voiceError}
-        </Text>
-      ) : null}
+        {voiceError ? (
+          <Text
+            style={styles.voiceErrorText}
+          >
+            {voiceError}
+          </Text>
+        ) : null}
 
         <View
           style={
@@ -1229,6 +1333,7 @@ export default function ConversationScreen({
                 size="small"
                 color="#ffffff"
               />
+
               <Text
                 style={[
                   styles.voiceButtonText,

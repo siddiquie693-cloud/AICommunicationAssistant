@@ -41,6 +41,12 @@ class GeminiProvider(AIProvider):
             cast=int,
         )
 
+        self.thinking_budget = config(
+            "GEMINI_THINKING_BUDGET",
+            default=0,
+            cast=int,
+        )
+
         self.client = genai.Client(
             api_key=self.api_key,
         )
@@ -91,6 +97,9 @@ class GeminiProvider(AIProvider):
             system_instruction=system_prompt,
             temperature=self.temperature,
             max_output_tokens=self.max_tokens,
+            thinking_config=types.ThinkingConfig(
+                thinking_budget=self.thinking_budget,
+            ),
         )
 
     def generate(
@@ -158,8 +167,17 @@ class GeminiProvider(AIProvider):
             for chunk in response_stream:
                 if chunk.text:
                     yield chunk.text
+                else:
+                    print(
+                        "GEMINI EMPTY CHUNK:",
+                        chunk,
+                    )
 
         except Exception as exc:
+            print(
+                "GEMINI STREAM ERROR:",
+                repr(exc),
+            )
             raise AIProviderError(
                 "Failed to generate streaming response from Gemini."
             ) from exc
