@@ -170,6 +170,20 @@ async function refreshAccessTokenOnce() {
   return refreshPromise;
 }
 
+export async function refreshAccessToken() {
+  try {
+    return await refreshAccessTokenOnce();
+  } catch (error) {
+    await clearTokens();
+
+    notifySessionExpired();
+
+    throw new Error(
+      'Your session has expired. Please log in again.'
+    );
+  }
+}
+
 async function handleExpiredSession() {
   await clearTokens();
 

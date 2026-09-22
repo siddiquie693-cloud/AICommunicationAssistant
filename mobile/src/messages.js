@@ -1,5 +1,10 @@
 import { API_BASE_URL } from './config';
-import { apiRequest } from './api';
+import {
+  apiRequest,
+  refreshAccessToken,
+} from './api';
+
+import { getAccessToken } from './storage';
 
 export async function getMessages(
   token,
@@ -64,20 +69,19 @@ export async function deleteMessage(
   );
 }
 
-export async function streamAIMessage(
-  token,
+async function performStreamRequest(
+  accessToken,
   conversationId,
   content,
-  preferredLanguage,
-  onChunk
+  preferredLanguage
 ) {
-  const response = await fetch(
+  return fetch(
     `${API_BASE_URL}/api/conversations/${conversationId}/messages/stream/`,
     {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
+        Authorization: `Bearer ${accessToken}`,
       },
       body: JSON.stringify({
         content,
@@ -85,20 +89,65 @@ export async function streamAIMessage(
       }),
     }
   );
+}
+
+async function getStreamErrorMessage(
+  response
+) {
+  let errorMessage = 'AI request failed.';
+
+  try {
+    const data = await response.json();
+
+    errorMessage =
+      data?.error?.message ||
+      data?.detail ||
+      errorMessage;
+  } catch (error) {
+    // Keep default error message.
+  }
+
+  return errorMessage;
+}
+
+export async function streamAIMessage(
+  token,
+  conversationId,
+  content,
+  preferredLanguage,
+  onChunk
+) {
+  let accessToken =
+    token || await getAccessToken();
+
+  let response;
+
+  try {
+    response = await performStreamRequest(
+      accessToken,
+      conversationId,
+      content,
+      preferredLanguage
+    );
+  } catch (error) {
+    throw error;
+  }
+
+  if (response.status === 401) {
+    accessToken =
+      await refreshAccessToken();
+
+    response = await performStreamRequest(
+      accessToken,
+      conversationId,
+      content,
+      preferredLanguage
+    );
+  }
 
   if (!response.ok) {
-    let errorMessage = 'AI request failed.';
-
-    try {
-      const data = await response.json();
-
-      errorMessage =
-        data?.error?.message ||
-        data?.detail ||
-        errorMessage;
-    } catch (error) {
-      // Keep default error message.
-    }
+    const errorMessage =
+      await getStreamErrorMessage(response);
 
     throw new Error(errorMessage);
   }
@@ -115,7 +164,8 @@ export async function streamAIMessage(
   let completedText = '';
 
   while (true) {
-    const { value, done } = await reader.read();
+    const { value, done } =
+      await reader.read();
 
     if (done) {
       break;
@@ -145,7 +195,7 @@ export async function streamAIMessage(
   if (
     completedText.trim() ===
     'AI service is temporarily unavailable. Please try again later.'
-   ){
+  ) {
     throw new Error(
       'AI service is temporarily unavailable. Please try again later.'
     );
