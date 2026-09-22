@@ -12,6 +12,7 @@ import {
   Text,
   TextInput,
   View,
+  useWindowDimensions,
 } from 'react-native';
 
 import * as Clipboard from 'expo-clipboard';
@@ -33,6 +34,12 @@ export default function WhatsAppScreen({
   preferredLanguage,
   onBack,
 }) {
+  const {width} = useWindowDimensions();
+
+  const horizontalPadding = width < 360 ? 12 : width < 600 ? 16 : 24;
+
+  const contentMaxWidth = width >= 900 ? 760 : undefined;
+
   const [recipient, setRecipient] =
     useState('');
 
@@ -315,6 +322,9 @@ export default function WhatsAppScreen({
           style={
             styles.suggestionLoading
           }
+          accessible
+          accessibilityRole="progressbar"
+          accessibilityLabel="Generating AI reply"
         >
           <ActivityIndicator
             size="small"
@@ -342,6 +352,8 @@ export default function WhatsAppScreen({
             style={
               styles.suggestionContainer
             }
+            accessible
+            accessibilityLabel={`AI suggested reply: ${suggestedReply}`}
           >
             <Text
               style={
@@ -356,6 +368,9 @@ export default function WhatsAppScreen({
             style={
               styles.streamingContainer
             }
+            accessible
+            accessibilityRole="progressbar"
+            accessibilityLabel="Receiving AI response"
           >
             <ActivityIndicator
               size="small"
@@ -402,6 +417,12 @@ export default function WhatsAppScreen({
                 handleUseSuggestion
               }
               disabled={copying}
+              accessibilityRole="button"
+              accessibilityLabel="Use AI suggestion"
+              accessibilityHint="Replaces your message with the generated AI suggestion"
+              accessibilityState={{
+                disabled: copying,
+              }}
             >
               <Text
                 style={
@@ -420,6 +441,17 @@ export default function WhatsAppScreen({
                 handleCopySuggestion
               }
               disabled={copying}
+              accessibilityRole="button"
+              accessibilityLabel={
+                copying
+                  ? 'Copying AI suggestion'
+                  : 'Copy AI suggestion'
+              }
+              accessibilityHint="Copies the generated AI reply to the clipboard"
+              accessibilityState={{
+                disabled: copying,
+                busy: copying,
+              }}
             >
               <Text
                 style={
@@ -445,6 +477,9 @@ export default function WhatsAppScreen({
           style={
             styles.generationErrorContainer
           }
+          accessible
+          accessibilityRole="alert"
+          accessibilityLabel="Unable to generate an AI reply"
         >
           <Text
             style={
@@ -471,6 +506,8 @@ export default function WhatsAppScreen({
         style={
           styles.emptySuggestionContainer
         }
+        accessible
+        accessibilityLabel="No AI suggestion yet"
       >
         <Text
           style={
@@ -499,7 +536,10 @@ export default function WhatsAppScreen({
       behavior={
         Platform.OS === 'ios'
           ? 'padding'
-          : undefined
+          : 'height'
+      }
+      keyboardVerticalOffset={
+        Platform.OS === 'ios' ? 8 : 0
       }
     >
       <NotificationBanner
@@ -514,6 +554,12 @@ export default function WhatsAppScreen({
           style={styles.backButton}
           onPress={onBack}
           disabled={loading}
+          accessibilityRole="button"
+          accessibilityLabel="Go back"
+          accessibilityHint="Return to the home screen"
+          accessibilityState={{
+            disabled: loading,
+          }}
         >
           <Text
             style={styles.backButtonText}
@@ -537,15 +583,34 @@ export default function WhatsAppScreen({
 
       <ScrollView
         style={styles.scrollView}
-        contentContainerStyle={
-          styles.scrollContent
-        }
+        contentContainerStyle={[
+          styles.scrollContent,
+          {
+            paddingHorizontal:
+              horizontalPadding,
+          },
+          contentMaxWidth
+            ? {
+                width: '100%',
+                maxWidth: contentMaxWidth,
+                alignSelf: 'center',
+              }
+            : null,
+        ]}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
+        keyboardDismissMode={
+          Platform.OS === 'ios'
+            ? 'interactive'
+            : 'on-drag'
+        }
       >
         {error ? (
           <View
             style={styles.errorContainer}
+            accessible
+            accessibilityRole="alert"
+            accessibilityLabel={`Error: ${error}`}
           >
             <Text
               style={styles.errorText}
@@ -581,6 +646,11 @@ export default function WhatsAppScreen({
               keyboardType="phone-pad"
               editable={!loading}
               autoCapitalize="none"
+              accessibilityLabel="WhatsApp recipient phone number"
+              accessibilityHint="Enter a phone number including the country code"
+              accessibilityState={{
+                disabled: loading,
+              }}
             />
 
             {recipientError ? (
@@ -588,6 +658,7 @@ export default function WhatsAppScreen({
                 style={
                   styles.fieldErrorText
                 }
+                accessibilityRole="alert"
               >
                 {recipientError}
               </Text>
@@ -635,6 +706,11 @@ export default function WhatsAppScreen({
               maxLength={2000}
               editable={!loading}
               textAlignVertical="top"
+              accessibilityLabel="WhatsApp message"
+              accessibilityHint="Enter the message you want the AI to use to generate a reply"
+              accessibilityState={{
+                disabled: loading,
+              }}
             />
 
             {messageError ? (
@@ -642,6 +718,7 @@ export default function WhatsAppScreen({
                 style={
                   styles.fieldErrorText
                 }
+                accessibilityRole="alert"
               >
                 {messageError}
               </Text>
@@ -669,6 +746,8 @@ export default function WhatsAppScreen({
               style={
                 styles.languageContainer
               }
+              accessible
+              accessibilityLabel={`AI response language: ${activeLanguage}`}
             >
               <View
                 style={
@@ -741,6 +820,17 @@ export default function WhatsAppScreen({
             onPress={
               handleGenerateSuggestion
             }
+            accessibilityRole="button"
+            accessibilityLabel={
+              loading
+                ? 'Generating AI reply'
+                : 'Generate AI reply'
+            }
+            accessibilityHint="Generates an AI suggested response using your message"
+            accessibilityState={{
+              disabled: loading,
+              busy: loading,
+            }}
           >
             {loading ? (
               <View
@@ -802,8 +892,12 @@ const styles = StyleSheet.create({
   },
 
   backButton: {
-    paddingVertical: 6,
-    paddingRight: 12,
+    minWidth: 48,
+    minHeight: 48,
+    paddingVertical: 10,
+    paddingHorizontal: 8,
+    justifyContent: 'center',
+    alignItems: 'flex-start',
   },
 
   backButtonText: {
@@ -862,7 +956,7 @@ const styles = StyleSheet.create({
   },
 
   input: {
-    height: 50,
+    minHeight: 50,
     borderWidth: 1,
     borderColor: '#d1d5db',
     borderRadius: 12,
@@ -1068,7 +1162,7 @@ const styles = StyleSheet.create({
 
   secondaryButton: {
     flex: 1,
-    minHeight: 44,
+    minHeight: 48,
     borderWidth: 1,
     borderColor: '#d1d5db',
     borderRadius: 10,
@@ -1086,7 +1180,7 @@ const styles = StyleSheet.create({
   },
 
   primaryButton: {
-    minHeight: 50,
+    minHeight: 52,
     borderRadius: 12,
     backgroundColor: '#2563eb',
     justifyContent: 'center',

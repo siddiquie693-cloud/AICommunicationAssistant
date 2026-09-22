@@ -1,7 +1,12 @@
-import { useEffect, useState } from 'react';
+import { 
+  useEffect, 
+  useState, 
+} from 'react';
+
 import {
   ActivityIndicator,
   Alert,
+  Platform,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -10,6 +15,7 @@ import {
   TouchableOpacity,
   TextInput,
   View,
+  useWindowDimensions,
 } from 'react-native';
 
 import { getCurrentUser, logout } from './auth';
@@ -36,6 +42,12 @@ import {
 } from './storage';
 
 export default function HomeScreen({ onLogout }) {
+  const {width} = useWindowDimensions();
+
+  const horizontalPadding = width < 360 ? 16 : width < 600 ? 20 : 24;
+
+  const contentMaxWidth = width >= 900 ? 760 : undefined;
+
   const [user, setUser] = useState(null);
 
   const [isEditingProfile, setIsEditingProfile] =
@@ -1052,8 +1064,24 @@ export default function HomeScreen({ onLogout }) {
   return (
     <ScrollView
       style={styles.scrollView}
-      contentContainerStyle={
-        styles.container
+      contentContainerStyle={[
+        styles.container,
+        {
+          paddingHorizontal: horizontalPadding,
+        },
+        contentMaxWidth
+          ? {
+              width: '100%',
+              maxWidth: contentMaxWidth,
+              alignSelf: 'center',
+            }
+          : null,  
+      ]}
+      keyboardShouldPersistTaps="handled"
+      keyboardDismissMode={
+        Platform.OS === 'ios'
+          ? 'interactive'
+          : "on-drag"
       }
       refreshControl={
         <RefreshControl
@@ -1085,6 +1113,9 @@ export default function HomeScreen({ onLogout }) {
               onPress={() =>
                 setIsEditingProfile(true)
               }
+              accessibilityRole='button'
+              accessibilityLabel='Edit profile'
+              accessibilityHint='Opens the profile editor'
             >
               <Text
                 style={
@@ -1147,6 +1178,8 @@ export default function HomeScreen({ onLogout }) {
               value={
                 profileForm.first_name
               }
+              accessibilityLabel="First name"
+              accessibilityHint="Enter your first name"
               onChangeText={(value) =>
                 handleProfileFieldChange(
                   'first_name',
@@ -1168,6 +1201,8 @@ export default function HomeScreen({ onLogout }) {
               value={
                 profileForm.last_name
               }
+              accessibilityLabel="Last name"
+              accessibilityHint="Enter your last name"
               onChangeText={(value) =>
                 handleProfileFieldChange(
                   'last_name',
@@ -1191,6 +1226,15 @@ export default function HomeScreen({ onLogout }) {
                 )
               }
               disabled={isSavingProfile}
+              accessibilityRole="button"
+              accessibilityLabel={`Preferred language: ${getLanguageLabel(
+                profileForm.preferred_language
+              )}`}
+              accessibilityHint="Opens the preferred language selector"
+              accessibilityState={{
+                disabled: isSavingProfile,
+                expanded: showPreferredLanguagePicker,
+              }}
             >
               <Text
                 style={
@@ -1225,6 +1269,18 @@ export default function HomeScreen({ onLogout }) {
                     style={
                       styles.languageOption
                     }
+                    accessibilityRole="button"
+                    accessibilityLabel={`Select ${language.name}${
+                      language.native_name
+                        ? `, ${language.native_name}`
+                        : ''
+                    }`}
+                    accessibilityState={{
+                      selected:
+                        profileForm.preferred_language ===
+                        language.code,
+                    }}
+                  
                     onPress={() => {
                       handleProfileFieldChange(
                         'preferred_language',
@@ -1262,6 +1318,14 @@ export default function HomeScreen({ onLogout }) {
 
             <Pressable
               style={styles.languageSelector}
+              accessibilityLabel={`Voice language: ${getLanguageLabel(
+                profileForm.voice_language
+              )}`}
+              accessibilityHint="Opens the voice language selector"
+              accessibilityState={{
+                disabled: isSavingProfile,
+                expanded: showVoiceLanguagePicker,
+              }}
               onPress={() =>
                 setShowVoiceLanguagePicker(
                   (current) => !current
@@ -1371,6 +1435,12 @@ export default function HomeScreen({ onLogout }) {
                 disabled={
                   isSavingProfile
                 }
+                accessibilityRole="button"
+                accessibilityLabel="Cancel profile editing"
+                accessibilityHint="Discards profile changes and closes the editor"
+                accessibilityState={{
+                  disabled: isSavingProfile,
+                }}
               >
                 <Text
                   style={
@@ -1387,6 +1457,17 @@ export default function HomeScreen({ onLogout }) {
                   isSavingProfile &&
                     styles.buttonDisabled,
                 ]}
+                accessibilityRole="button"
+                accessibilityLabel={
+                  isSavingProfile
+                    ? 'Saving profile'
+                    : 'Save profile changes'
+                }
+                accessibilityHint="Saves your profile information"
+                accessibilityState={{
+                  disabled: isSavingProfile,
+                  busy: isSavingProfile,
+                }}
                 onPress={
                   handleSaveProfile
                 }
@@ -1428,6 +1509,9 @@ export default function HomeScreen({ onLogout }) {
         <Pressable
           style={styles.whatsappButton}
           onPress={handleOpenWhatsApp}
+          accessibilityRole="button"
+          accessibilityLabel="Open WhatsApp Assistant"
+          accessibilityHint="Opens the AI-assisted WhatsApp message screen"
         >
           <Text
             style={
@@ -1456,6 +1540,9 @@ export default function HomeScreen({ onLogout }) {
         <TouchableOpacity
           style={styles.phoneCallButton}
           onPress={handleOpenPhoneCall}
+          accessibilityRole="button"
+          accessibilityLabel="Open Phone Call Assistant"
+          accessibilityHint="Opens the AI-assisted phone call screen"
         >
           <Text style={styles.phoneCallButtonText}>
             Open Phone Call Assistant
@@ -1476,6 +1563,8 @@ export default function HomeScreen({ onLogout }) {
         <TextInput
           style={styles.input}
           placeholder="Enter conversation title"
+          accessibilityLabel="Conversation title"
+          accessibilityHint="Enter a title for the new conversation"
           value={conversationTitle}
           onChangeText={
             setConversationTitle
@@ -1492,6 +1581,17 @@ export default function HomeScreen({ onLogout }) {
             creatingConversation &&
               styles.buttonDisabled,
           ]}
+          accessibilityRole="button"
+            accessibilityLabel={
+              creatingConversation
+                ? 'Creating conversation'
+                : 'Create new conversation'
+            }
+            accessibilityHint="Creates a new conversation"
+            accessibilityState={{
+              disabled: creatingConversation,
+              busy: creatingConversation,
+            }}
           onPress={
             handleCreateConversation
           }
@@ -1520,6 +1620,8 @@ export default function HomeScreen({ onLogout }) {
         <TextInput
           style={styles.searchInput}
           placeholder="Search conversations..."
+          accessibilityLabel="Search conversations"
+          accessibilityHint="Enter text to search your conversations"
           value={searchText}
           onChangeText={handleSearch}
           autoCapitalize="none"
@@ -1536,6 +1638,11 @@ export default function HomeScreen({ onLogout }) {
             onPress={() =>
               setActiveView('active')
             }
+            accessibilityRole="tab"
+            accessibilityLabel="Active conversations"
+            accessibilityState={{
+              selected: activeView === 'active',
+            }}
           >
             <Text
               style={[
@@ -1658,6 +1765,22 @@ export default function HomeScreen({ onLogout }) {
                     actionInProgress &&
                       styles.itemDisabled,
                   ]}
+                   accessible
+                  accessibilityRole="button"
+                  accessibilityLabel={`Conversation: ${
+                    conversation.title || 'Untitled'
+                  }`}
+                  accessibilityHint={
+                    activeView === 'trash'
+                      ? 'This conversation is in Trash'
+                      : 'Double tap to open. Long press for conversation actions.'
+                  }
+                  accessibilityState={{
+                    disabled:
+                      actionInProgress ||
+                      !conversationId,
+                    busy: actionInProgress,
+                  }}
                   onPress={() =>
                     handleConversationPress(
                       conversation
@@ -1721,7 +1844,12 @@ export default function HomeScreen({ onLogout }) {
       </View>
 
       {error ? (
-        <View style={styles.inlineError}>
+        <View 
+          style={styles.inlineError}
+          accessible
+          accessibilityRole="alert"
+          accessibilityLabel={`Error: ${error}`}
+        >
           <Text
             style={styles.inlineErrorText}
           >
@@ -1732,6 +1860,9 @@ export default function HomeScreen({ onLogout }) {
             onPress={
               refreshConversations
             }
+            accessibilityRole="button"
+            accessibilityLabel="Retry loading conversations"
+            accessibilityHint="Attempts to load conversations again"
           >
             <Text
               style={styles.retryText}
@@ -1745,6 +1876,9 @@ export default function HomeScreen({ onLogout }) {
       <Pressable
         style={styles.logoutButton}
         onPress={handleLogout}
+        accessibilityRole="button"
+        accessibilityLabel="Sign out"
+        accessibilityHint="Sign out of the current account"
       >
         <Text
           style={
@@ -1812,12 +1946,14 @@ const styles = StyleSheet.create({
   },
 
   editProfileButton: {
+    minHeight: 44,
     borderWidth: 1,
     borderColor: '#111827',
     borderRadius: 10,
     paddingHorizontal: 16,
     paddingVertical: 8,
     marginBottom: 16,
+    justifyContent: 'center',
   },
 
   editProfileButtonText: {
@@ -1891,10 +2027,12 @@ const styles = StyleSheet.create({
   },
 
   languageOption: {
+    minHeight: 48,
     paddingHorizontal: 15,
     paddingVertical: 12,
     borderBottomWidth: 1,
     borderBottomColor: '#f3f4f6',
+    justifyContent: 'center',
   },
 
   languageOptionName: {
@@ -2038,9 +2176,11 @@ const styles = StyleSheet.create({
 
   tab: {
     flex: 1,
+    minHeight: 44,
     paddingVertical: 10,
     borderRadius: 9,
     alignItems: 'center',
+    justifyContent: 'center',
   },
 
   activeTab: {
@@ -2060,6 +2200,7 @@ const styles = StyleSheet.create({
   conversationItem: {
     flexDirection: 'row',
     alignItems: 'center',
+    minHeight: 60,
     borderTopWidth: 1,
     borderTopColor: '#e5e7eb',
     paddingVertical: 14,
@@ -2148,6 +2289,8 @@ const styles = StyleSheet.create({
     color: '#991b1b',
     fontSize: 14,
     fontWeight: '700',
+    minHeight: 44,
+    paddingVertical: 12,
   },
 
   loadingText: {
