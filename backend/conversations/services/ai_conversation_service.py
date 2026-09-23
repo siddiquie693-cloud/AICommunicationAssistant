@@ -1,6 +1,7 @@
 from ai.providers.factory import get_ai_provider
 from ai.services.ai_service import AIService
 from decouple import config
+from django.conf import settings
 
 from ai.speech_to_text.factory import get_speech_to_text_service
 from ai.speech_to_text.service import SpeechToTextService
@@ -60,7 +61,9 @@ class AIConversationService:
         self.translation_service = translation_service  
 
         if speech_to_text_service is None:
-            speech_to_text_service = get_speech_to_text_service()
+            speech_to_text_service = get_speech_to_text_service(
+                settings.SPEECH_TO_TEXT_PROVIDER
+            )
 
         self.speech_to_text_service = speech_to_text_service  
 

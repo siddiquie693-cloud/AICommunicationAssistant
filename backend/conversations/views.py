@@ -6,6 +6,7 @@ from ai.providers.exceptions import AIProviderError
 from ai.translation.exceptions import TranslationProviderError
 from .speech_to_text_serializers import SpeechToTextSerializer
 from ai.speech_to_text.exceptions import SpeechToTextProviderError
+
 from ai.text_to_speech.exceptions import TextToSpeechProviderError
 from .text_to_speech_serializers import TextToSpeechSerializer
 
@@ -382,7 +383,8 @@ class SpeechToTextAPIView(generics.GenericAPIView):
                     ),
                 )
             )
-        except SpeechToTextProviderError:
+        except SpeechToTextProviderError as exc:
+            print("SPECCH TO TEXT PROVIDER ERROR:", repr(exc))
             return Response(
                 {
                     "error": {

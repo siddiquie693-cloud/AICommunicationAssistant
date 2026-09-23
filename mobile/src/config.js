@@ -3,7 +3,13 @@ const DEFAULT_API_BASE_URL =
 
 const configuredApiBaseUrl =
   process.env.EXPO_PUBLIC_API_BASE_URL ||
-  DEFAULT_API_BASE_URL;
+  (__DEV__ ? DEFAULT_API_BASE_URL : null);
+
+if (!configuredApiBaseUrl) {
+  throw new Error(
+    'EXPO_PUBLIC_API_BASE_URL is required for production builds.'
+  );
+}
 
 export const API_BASE_URL =
   configuredApiBaseUrl.replace(/\/+$/, '');
@@ -90,3 +96,5 @@ export function validateApiConfiguration() {
       isHttps || isLocalDevelopment,
   };
 }
+
+validateApiConfiguration();

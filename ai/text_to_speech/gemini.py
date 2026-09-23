@@ -13,23 +13,29 @@ class GeminiTextToSpeechProvider(TextToSpeechProvider):
     def __init__(
         self,
         api_key: str | None = None,
-        model: str = "gemini-3.1-flash-tts-preview",
+        model: str | None = None,
     ):
         self.api_key = (
             api_key
             or os.getenv("GOOGLE_API_KEY")
             or os.getenv("GEMINI_API_KEY")
         )
-
+    
         if not self.api_key:
             raise ValueError(
                 "GOOGLE_API_KEY or GEMINI_API_KEY is required."
             )
 
-        self.client = genai.Client(
-            api_key=self.api_key
+        self.client = genai.Client(api_key=self.api_key)
+        self.model = model or os.getenv(
+            "GEMINI_TTS_MODEL",
+            "gemini-3.1-flash-tts-preview",
         )
-        self.model = model
+        self.default_voice = os.getenv(
+            "GEMINI_TTS_VOICE",
+            "kore",
+        )
+        
 
     def synthesize(
         self,
@@ -44,7 +50,7 @@ class GeminiTextToSpeechProvider(TextToSpeechProvider):
             )
 
         try:
-            voice_name = voice or "Kore"
+            voice_name = voice or self.default_voice
 
             prompt = text.strip()
 

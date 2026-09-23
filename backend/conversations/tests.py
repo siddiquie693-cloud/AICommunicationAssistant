@@ -1092,6 +1092,12 @@ class MessageListCreateAPITestCase(APITestCase):
             email="messageuser@example.com",
             password="StrongPass123",
         )
+        self.generate_response_patcher = patch(
+            "conversations.views.AIConversationService.generate_response"
+        )
+        self.mock_generate_response = (
+            self.generate_response_patcher.start()
+        )
 
         self.other_user = User.objects.create_user(
             username="othermessageuser",
@@ -1112,6 +1118,22 @@ class MessageListCreateAPITestCase(APITestCase):
         self.client.force_authenticate(
             user=self.user
         )
+        self.addCleanup(
+            self.generate_response_patcher.stop
+        )
+        
+    @patch(
+        "conversations.views.AIConversationService.generate_response"
+    )
+    def test_ai_response_generation_is_mocked(
+        self,
+        mock_generate_response,
+    ):
+        mock_generate_response.return_value = Message.objects.create(
+            conversation=self.conversation,
+            sender_type=Message.SENDER_ASSISTANT,
+            content="Mock AI response",
+        )   
 
     def test_list_messages(self):
         Message.objects.create(
