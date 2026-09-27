@@ -1,6 +1,6 @@
 from unittest.mock import patch
 
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from ai.prompts.conversation import CONVERSATION_SYSTEM_PROMPT
 from conversations.models import Conversation, Message
 from conversations.services.ai_conversation_service import (
@@ -8,7 +8,11 @@ from conversations.services.ai_conversation_service import (
 )
 from users.models import User
 
-
+@override_settings(
+    AI_PROVIDER="mock",
+    SPEECH_TO_TEXT_PROVIDER="mock",
+    TEXT_TO_SPEECH_PROVIDER="mock",
+)
 class AIConversationServiceTests(TestCase):
 
     def setUp(self):

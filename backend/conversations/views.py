@@ -270,11 +270,8 @@ class AIMessageStreamAPIView(generics.GenericAPIView):
                     user_message=user_message,
                     preferred_language=preferred_language,
                 )
-            except AIProviderError as exc:
-                yield (
-                    "AI service is temporarily unavailable. "
-                    "Please try again later."
-                )
+            except AIProviderError:
+                return
 
         return StreamingHttpResponse(
             stream_response(),

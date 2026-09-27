@@ -1,4 +1,5 @@
 from django.test import SimpleTestCase
+from django.test import override_settings
 from ai.text_to_speech.service import TextToSpeechService
 from ai.text_to_speech.factory import (
     get_text_to_speech_provider,
@@ -16,7 +17,7 @@ class TextToSpeechFactoryTests(SimpleTestCase):
             provider,
             MockTextToSpeechProvider,
         )
-
+    @override_settings(TEXT_TO_SPEECH_PROVIDER="mock")
     def test_get_default_provider(self):
         provider = get_text_to_speech_provider()
 

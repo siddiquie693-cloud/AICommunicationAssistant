@@ -1,4 +1,4 @@
-import os
+from django.conf import settings
 
 from ai.speech_to_text.base import SpeechToTextProvider
 from ai.speech_to_text.gemini import GeminiSpeechToTextProvider
@@ -10,10 +10,7 @@ def get_speech_to_text_provider(
     provider_name: str | None = None,
 ) -> SpeechToTextProvider:
     if provider_name is None:
-        provider_name = os.getenv(
-            "SPEECH_TO_TEXT_PROVIDER",
-            "mock",
-        )
+        provider_name = settings.SPEECH_TO_TEXT_PROVIDER
 
     provider_name = provider_name.strip().lower()
 

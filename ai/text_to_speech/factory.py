@@ -1,4 +1,4 @@
-import os
+from django.conf import settings
 
 from ai.text_to_speech.base import TextToSpeechProvider
 from ai.text_to_speech.gemini import GeminiTextToSpeechProvider
@@ -11,10 +11,7 @@ def get_text_to_speech_provider(
 ) -> TextToSpeechProvider:
     provider_name = (
         provider_name
-        or os.getenv(
-            "TEXT_TO_SPEECH_PROVIDER",
-            "gemini",
-        )
+        or settings.TEXT_TO_SPEECH_PROVIDER
     ).lower()
 
     if provider_name == "mock":

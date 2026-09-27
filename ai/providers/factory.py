@@ -1,4 +1,4 @@
-from decouple import config
+from django.conf import settings
 
 from ai.providers.base import AIProvider
 from ai.providers.gemini import GeminiProvider
@@ -13,7 +13,7 @@ def get_ai_provider(
     Return the configured AI provider.
 
     If provider_name is not supplied, AI_PROVIDER is read
-    from the environment configuration.
+    from Django settings.
 
     Args:
         provider_name: Optional name of the provider to use.
@@ -25,10 +25,7 @@ def get_ai_provider(
         ValueError: If the provider is not supported.
     """
     if provider_name is None:
-        provider_name = config(
-            "AI_PROVIDER",
-            default="mock",
-        )
+        provider_name = settings.AI_PROVIDER
 
     provider_name = provider_name.strip().lower()
 

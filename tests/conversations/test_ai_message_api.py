@@ -2,7 +2,7 @@
 from django.contrib.auth import get_user_model
 from django.urls import reverse
 from rest_framework import status
-from rest_framework.test import APITestCase
+from rest_framework.test import APITestCase, override_settings
 from unittest.mock import patch
 from django.utils import timezone
 from ai.providers.exceptions import AIProviderError
@@ -12,7 +12,11 @@ from conversations.models import Conversation, Message
 
 User = get_user_model()
 
-
+@override_settings(
+    AI_PROVIDER="mock",
+    SPEECH_TO_TEXT_PROVIDER="mock",
+    TEXT_TO_SPEECH_PROVIDER="mock",
+)
 class AIMessageAPITests(APITestCase):
 
     def setUp(self):

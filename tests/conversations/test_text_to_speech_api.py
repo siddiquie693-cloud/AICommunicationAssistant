@@ -2,7 +2,7 @@ from io import BytesIO
 
 from django.urls import reverse
 from django.contrib.auth import get_user_model
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from rest_framework import status
 from rest_framework.test import APIClient
 
@@ -11,7 +11,11 @@ from ai.text_to_speech.exceptions import TextToSpeechProviderError
 
 User = get_user_model()
 
-
+@override_settings(
+    AI_PROVIDER="mock",
+    SPEECH_TO_TEXT_PROVIDER="mock",
+    TEXT_TO_SPEECH_PROVIDER="mock",
+)
 class TextToSpeechAPITests(TestCase):
 
     def setUp(self):
@@ -46,7 +50,7 @@ class TextToSpeechAPITests(TestCase):
         )
 
         self.assertEqual(
-            response.data["audio"],
+            response.content,
             b"Mock audio data",
         )
 

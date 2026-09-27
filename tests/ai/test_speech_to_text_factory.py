@@ -1,4 +1,5 @@
 from django.test import SimpleTestCase
+from django.test import override_settings
 from ai.speech_to_text.exceptions import SpeechToTextProviderError
 from ai.speech_to_text.base import SpeechToTextProvider
 from ai.speech_to_text.factory import (
@@ -10,6 +11,7 @@ from ai.speech_to_text.service import SpeechToTextService
 
 
 class SpeechToTextFactoryTests(SimpleTestCase):
+    @override_settings(SPEECH_TO_TEXT_PROVIDER="mock")
     def test_get_mock_provider(self):
         provider = get_speech_to_text_provider()
 
@@ -38,6 +40,7 @@ class SpeechToTextFactoryTests(SimpleTestCase):
             SpeechToTextService,
         )
 
+    @override_settings(SPEECH_TO_TEXT_PROVIDER="mock")
     def test_speech_to_text_service_end_to_end(self):
         service = get_speech_to_text_service()
 
@@ -49,7 +52,7 @@ class SpeechToTextFactoryTests(SimpleTestCase):
         self.assertEqual(
             result,
             "Mock transcription",
-        )    
+        )
 
     def test_service_propagates_provider_error(self):
         class FailingSpeechToTextProvider:
@@ -73,4 +76,4 @@ class SpeechToTextFactoryTests(SimpleTestCase):
             service.transcribe(
                 b"audio-data",
                 language="en",
-            )        
+            )

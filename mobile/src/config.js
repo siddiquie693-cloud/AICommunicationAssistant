@@ -1,5 +1,5 @@
 const DEFAULT_API_BASE_URL =
-  'http://10.145.219.95:8000';
+  'http://10.230.201.95:8000';
 
 const configuredApiBaseUrl =
   process.env.EXPO_PUBLIC_API_BASE_URL ||

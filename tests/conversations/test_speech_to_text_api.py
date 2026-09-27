@@ -2,11 +2,15 @@ from io import BytesIO
 
 from django.urls import reverse
 from rest_framework import status
-from rest_framework.test import APITestCase
+from rest_framework.test import APITestCase, override_settings
 from ai.speech_to_text.exceptions import SpeechToTextProviderError
 from users.models import User
 
-
+@override_settings(
+    AI_PROVIDER="mock",
+    SPEECH_TO_TEXT_PROVIDER="mock",
+    TEXT_TO_SPEECH_PROVIDER="mock",
+)
 class SpeechToTextAPITestCase(APITestCase):
     def setUp(self):
         self.user = User.objects.create_user(

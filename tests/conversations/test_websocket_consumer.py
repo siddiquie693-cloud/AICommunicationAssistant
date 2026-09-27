@@ -1,7 +1,7 @@
 from asgiref.sync import async_to_sync
 from channels.db import database_sync_to_async
 from channels.testing import WebsocketCommunicator
-from django.test import TransactionTestCase
+from django.test import TransactionTestCase, override_settings
 from rest_framework_simplejwt.tokens import RefreshToken
 from conversations.models import Conversation, Message
 
@@ -13,6 +13,11 @@ from users.models import User
 from django.utils import timezone
 from unittest.mock import patch, AsyncMock, ANY, MagicMock
 
+@override_settings(
+    AI_PROVIDER="mock",
+    SPEECH_TO_TEXT_PROVIDER="mock",
+    TEXT_TO_SPEECH_PROVIDER="mock",
+)
 class ConversationConsumerTests(TransactionTestCase):
 
     def test_unauthenticated_websocket_connection_is_rejected(self):
