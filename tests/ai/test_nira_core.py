@@ -1,4 +1,4 @@
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 
 from django.test import SimpleTestCase
 
@@ -133,7 +133,93 @@ class NIRACoreTests(SimpleTestCase):
             NIRACoreProcessingError,
             "brain.process\\(\\) must return a BrainPipelineResult.",
         ):
-            core.process(request)               
+            core.process(request)  
+
+    @patch("ai.core.service.logger")
+    def test_nira_core_logs_request_source(
+        self,
+        mock_logger,
+    ):
+        brain = Mock()
+
+        expected_result = BrainPipelineResult(
+            intent=Mock(),
+            context=Mock(),
+            action_plan=Mock(),
+            safety_results=[],
+            action_results=[],
+        )
+
+        brain.process.return_value = expected_result
+
+        core = NIRACore(brain)
+
+        request = BrainRequest(
+            text="Open calculator",
+            source="voice",
+        )
+
+        core.process(request)
+
+        mock_logger.info.assert_any_call(
+            "NIRA Core processing request from source=%s",
+            "voice",
+        )
+
+    @patch("ai.core.service.logger")
+    def test_nira_core_logs_successful_processing(
+        self,
+        mock_logger,
+    ):
+        brain = Mock()
+
+        expected_result = BrainPipelineResult(
+            intent=Mock(),
+            context=Mock(),
+            action_plan=Mock(),
+            safety_results=[],
+            action_results=[],
+        )
+
+        brain.process.return_value = expected_result
+
+        core = NIRACore(brain)
+
+        request = BrainRequest(
+            text="Open calculator",
+        )
+
+        core.process(request)
+
+        mock_logger.info.assert_any_call(
+            "NIRA Core processing completed successfully.",
+        )
+
+    @patch("ai.core.service.logger")
+    def test_nira_core_logs_unexpected_processing_error(
+        self,
+        mock_logger,
+    ):
+        brain = Mock()
+        brain.process.side_effect = RuntimeError(
+            "Brain processing failed."
+        )
+
+        core = NIRACore(brain)
+
+        request = BrainRequest(
+            text="Open calculator",
+        )
+
+        with self.assertRaisesRegex(
+            RuntimeError,
+            "Brain processing failed.",
+        ):
+            core.process(request)
+
+        mock_logger.exception.assert_called_once_with(
+            "NIRA Core processing failed with an unexpected error.",
+        )                             
 
     def test_nira_core_processes_request_through_real_brain(self):
         ai_service = Mock()

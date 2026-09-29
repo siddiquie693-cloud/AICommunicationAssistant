@@ -3,7 +3,9 @@ from ai.core.exceptions import (
     NIRACoreProcessingError,
     NIRACoreValidationError,
 )
+import logging
 
+logger = logging.getLogger(__name__)
 
 class NIRACore:
     """
@@ -30,16 +32,31 @@ class NIRACore:
                 "request must be a BrainRequest."
             )
 
+        logger.info(
+            "NIRA Core processing request from source=%s",
+            request.source,
+        )
+
         try:
             result = self.brain.process(request)
         except NIRACoreProcessingError:
+            logger.exception(
+                "NIRA Core processing failed with a Core processing error."
+            )
             raise
         except Exception:
+            logger.exception(
+                "NIRA Core processing failed with an unexpected error."
+            )
             raise
 
         if not isinstance(result, BrainPipelineResult):
             raise NIRACoreProcessingError(
                 "brain.process() must return a BrainPipelineResult."
             )
+
+        logger.info(
+            "NIRA Core processing completed successfully.",
+        )
 
         return result
