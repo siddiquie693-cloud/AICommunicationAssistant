@@ -38,3 +38,38 @@ class NIRACoreTests(SimpleTestCase):
 
         with self.assertRaises(TypeError):
             core.process("Open calculator")
+
+    def test_nira_core_rejects_invalid_brain_result(self):
+        brain = Mock()
+        brain.process.return_value = "invalid result"
+
+        core = NIRACore(brain)
+
+        request = BrainRequest(
+            text="Open calculator",
+        )
+
+        with self.assertRaises(TypeError):
+            core.process(request)   
+
+    def test_nira_core_propagates_brain_exception(self):
+        brain = Mock()
+        brain.process.side_effect = RuntimeError(
+            "Brain processing failed."
+        )
+
+        core = NIRACore(brain)
+
+        request = BrainRequest(
+            text="Open calculator",
+        )
+
+        with self.assertRaisesRegex(
+            RuntimeError,
+            "Brain processing failed.",
+        ):
+            core.process(request)      
+
+    def test_nira_core_rejects_missing_brain(self):
+        with self.assertRaises(ValueError):
+            NIRACore(None)               

@@ -7,6 +7,10 @@ class NIRACore:
     """
 
     def __init__(self, brain):
+        if brain is None:
+            raise ValueError(
+                "brain must be provided."
+            )
         self.brain = brain
 
     def process(
@@ -21,4 +25,10 @@ class NIRACore:
                 "request must be a BrainRequest."
             )
 
-        return self.brain.process(request)
+        result = self.brain.process(request)
+
+        if not isinstance(result, BrainPipelineResult):
+            raise TypeError(
+                "brain.process() must return a BrainPipelineResult."
+            )
+        return result
