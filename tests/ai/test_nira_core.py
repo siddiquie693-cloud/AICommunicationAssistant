@@ -5,6 +5,10 @@ from django.test import SimpleTestCase
 from ai.brain.types import BrainPipelineResult, BrainRequest
 from ai.core.service import NIRACore
 from ai.brain.service import NIRABrain
+from ai.core.exceptions import (
+    NIRACoreProcessingError,
+    NIRACoreValidationError,
+)
 
 class NIRACoreTests(SimpleTestCase):
 
@@ -36,8 +40,15 @@ class NIRACoreTests(SimpleTestCase):
         brain = Mock()
         core = NIRACore(brain)
 
-        with self.assertRaises(TypeError):
+        with self.assertRaises(NIRACoreValidationError):
             core.process("Open calculator")
+
+    def test_nira_core_rejects_non_brain_request_with_core_validation_error(self):
+        brain = Mock()
+        core = NIRACore(brain)
+
+        with self.assertRaises(NIRACoreValidationError):
+            core.process("Open calculator")        
 
     def test_nira_core_rejects_invalid_brain_result(self):
         brain = Mock()
@@ -49,8 +60,21 @@ class NIRACoreTests(SimpleTestCase):
             text="Open calculator",
         )
 
-        with self.assertRaises(TypeError):
+        with self.assertRaises(NIRACoreProcessingError):
             core.process(request)   
+
+    def test_nira_core_rejects_invalid_brain_result_with_core_processing_error(self):
+        brain = Mock()
+        brain.process.return_value = "invalid result"
+
+        core = NIRACore(brain)
+
+        request = BrainRequest(
+            text="Open calculator",
+        )
+
+        with self.assertRaises(NIRACoreProcessingError):
+            core.process(request)        
 
     def test_nira_core_propagates_brain_exception(self):
         brain = Mock()
@@ -71,8 +95,45 @@ class NIRACoreTests(SimpleTestCase):
             core.process(request)      
 
     def test_nira_core_rejects_missing_brain(self):
-        with self.assertRaises(ValueError):
-            NIRACore(None)         
+        with self.assertRaises(NIRACoreValidationError):
+            NIRACore(None)   
+
+    def test_nira_core_rejects_missing_brain_with_core_validation_error(self):
+        with self.assertRaises(NIRACoreValidationError):
+            NIRACore(None)       
+
+    def test_nira_core_missing_brain_error_message(self):
+        with self.assertRaisesRegex(
+            NIRACoreValidationError,
+            "brain must be provided.",
+        ):
+            NIRACore(None)
+
+    def test_nira_core_invalid_request_error_message(self):
+        brain = Mock()
+        core = NIRACore(brain)
+
+        with self.assertRaisesRegex(
+            NIRACoreValidationError,
+            "request must be a BrainRequest.",
+        ):
+            core.process("Open calculator")
+
+    def test_nira_core_invalid_brain_result_error_message(self):
+        brain = Mock()
+        brain.process.return_value = "invalid result"
+
+        core = NIRACore(brain)
+
+        request = BrainRequest(
+            text="Open calculator",
+        )
+
+        with self.assertRaisesRegex(
+            NIRACoreProcessingError,
+            "brain.process\\(\\) must return a BrainPipelineResult.",
+        ):
+            core.process(request)               
 
     def test_nira_core_processes_request_through_real_brain(self):
         ai_service = Mock()

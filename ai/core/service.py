@@ -1,4 +1,8 @@
 from ai.brain.types import BrainPipelineResult, BrainRequest
+from ai.core.exceptions import (
+    NIRACoreProcessingError,
+    NIRACoreValidationError,
+)
 
 
 class NIRACore:
@@ -8,9 +12,10 @@ class NIRACore:
 
     def __init__(self, brain):
         if brain is None:
-            raise ValueError(
+            raise NIRACoreValidationError(
                 "brain must be provided."
             )
+
         self.brain = brain
 
     def process(
@@ -21,14 +26,20 @@ class NIRACore:
         Process a user request through the NIRA Brain.
         """
         if not isinstance(request, BrainRequest):
-            raise TypeError(
+            raise NIRACoreValidationError(
                 "request must be a BrainRequest."
             )
 
-        result = self.brain.process(request)
+        try:
+            result = self.brain.process(request)
+        except NIRACoreProcessingError:
+            raise
+        except Exception:
+            raise
 
         if not isinstance(result, BrainPipelineResult):
-            raise TypeError(
+            raise NIRACoreProcessingError(
                 "brain.process() must return a BrainPipelineResult."
             )
+
         return result
