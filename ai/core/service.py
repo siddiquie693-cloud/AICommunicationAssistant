@@ -18,7 +18,13 @@ class NIRACore:
                 "brain must be provided."
             )
 
+        if not callable(getattr(brain, "process", None)):
+            raise NIRACoreValidationError(
+                "brain must provide a callable process() method."
+            )
+
         self.brain = brain
+
 
     def process(
         self,

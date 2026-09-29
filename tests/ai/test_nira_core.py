@@ -102,6 +102,48 @@ class NIRACoreTests(SimpleTestCase):
         with self.assertRaises(NIRACoreValidationError):
             NIRACore(None)       
 
+    def test_nira_core_rejects_brain_without_process_method(self):
+        brain = object()
+
+        with self.assertRaisesRegex(
+            NIRACoreValidationError,
+            "brain must provide a callable process\\(\\) method.",
+        ):
+            NIRACore(brain)      
+
+    def test_nira_core_accepts_brain_with_process_method(self):
+        brain = Mock()
+
+        expected_result = BrainPipelineResult(
+            intent=Mock(),
+            context=Mock(),
+            action_plan=Mock(),
+            safety_results=[],
+            action_results=[],
+        )
+
+        brain.process.return_value = expected_result
+
+        core = NIRACore(brain)
+
+        request = BrainRequest(
+            text="Open calculator",
+        )
+
+        result = core.process(request)
+
+        self.assertIs(result, expected_result)     
+
+    def test_nira_core_rejects_non_callable_process_attribute(self):
+        brain = Mock()
+        brain.process = "not callable"
+
+        with self.assertRaisesRegex(
+            NIRACoreValidationError,
+            "brain must provide a callable process\\(\\) method.",
+        ):
+            NIRACore(brain)         
+
     def test_nira_core_missing_brain_error_message(self):
         with self.assertRaisesRegex(
             NIRACoreValidationError,
