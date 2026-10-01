@@ -135,3 +135,99 @@ class Language(models.Model):
 
     def __str__(self):
         return f"{self.name} ({self.code})"      
+
+class NIRAPersonalProfile(models.Model):
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="nira_personal_profile",
+    )
+    languages = models.JSONField(
+        default=list,
+        blank=True,
+    )
+
+    communication_style = models.JSONField(
+        default=dict,
+        blank=True,
+    )
+
+    work_info = models.JSONField(
+        default=dict,
+        blank=True,
+    )
+
+    skills = models.JSONField(
+        default=list,
+        blank=True,
+    )
+
+    interests = models.JSONField(
+        default=list,
+        blank=True,
+    )
+
+    important_people = models.JSONField(
+        default=list,
+        blank=True,
+    )
+
+    custom_instructions = models.TextField(
+        blank=True,
+        default="",
+    )
+
+    privacy_settings = models.JSONField(
+        default=dict,
+        blank=True,
+    )
+
+    memory_settings = models.JSONField(
+        default=dict,
+        blank=True,
+    )
+
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+    )
+
+    updated_at = models.DateTimeField(
+        auto_now=True,
+    )
+
+    def clean(self):
+        from django.core.exceptions import ValidationError
+
+        list_fields = {
+            "languages",
+            "skills",
+            "interests",
+            "important_people",
+        }
+
+        dict_fields = {
+            "communication_style",
+            "work_info",
+            "privacy_settings",
+            "memory_settings",
+        }
+
+        errors = {}
+
+        for field_name in list_fields:
+            value = getattr(self, field_name)
+
+            if not isinstance(value, list):
+                errors[field_name] = "This field must contain a list."
+
+        for field_name in dict_fields:
+            value = getattr(self, field_name)
+
+            if not isinstance(value, dict):
+                errors[field_name] = "This field must contain an object."
+
+        if errors:
+            raise ValidationError(errors)
+
+    def __str__(self):
+        return f"NIRA Personal Profile for {self.user.email}"    

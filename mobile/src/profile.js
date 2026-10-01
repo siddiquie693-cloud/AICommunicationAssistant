@@ -14,3 +14,21 @@ export async function updateProfile(token, updates) {
     token,
   });
 }
+
+export async function getNIRAPersonalProfile(token) {
+  return apiRequest('/api/auth/nira-profile/', {
+    method: 'GET',
+    token,
+  });
+}
+
+export async function updateNIRAPersonalProfile(
+  token,
+  updates
+) {
+  return apiRequest('/api/auth/nira-profile/', {
+    method: 'PATCH',
+    body: updates,
+    token,
+  });
+}

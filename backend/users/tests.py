@@ -19,10 +19,1439 @@ from .serializers import (
     UserRegistrationSerializer,
     EmailVerificationTokenSerializer,
     PasswordResetTokenSerializer,
-    
+    NIRAPersonalProfileSerializer,    
+)
+
+from django.core.exceptions import (
+    ValidationError,
+)
+
+from .models import (
+    EmailVerificationToken,
+    PasswordResetToken,
+    Language,
+    NIRAPersonalProfile,
+)
+
+from .services import (
+    send_email_verification_email,
+    send_password_reset_email,
+)
+from .profile_services import (
+    get_nira_personal_profile,
+    create_nira_personal_profile,
+    update_nira_personal_profile,
+    validate_nira_personal_profile,
+    get_or_create_nira_personal_profile,
+    ensure_nira_profile_owner,
 )
 
 User = get_user_model()
+
+class NIRAPersonalProfileArchitectureTestCase(APITestCase):
+    def _create_test_user(self):
+        self.user = User.objects.create_user(
+            username="nira_profile_test_user",
+            email="nira_profile_test@example.com",
+            password="StrongPass123",
+        )
+        return self.user
+
+    def _create_test_profile(self):
+        if not hasattr(self, "user"):
+            self._create_test_user()
+        return NIRAPersonalProfile.objects.create(
+            user=self.user,
+        )
+    
+    def test_user_keeps_account_identity_fields(self):
+        user_fields = {
+            field.name
+            for field in User._meta.get_fields()
+        }
+
+        expected_fields = {
+            "username",
+            "email",
+            "first_name",
+            "last_name",
+            "email_verified",
+            "email_verified_at",
+            "whatsapp_phone_number",
+            "preferred_language_ref",
+            "voice_language_ref",
+            "timezone",
+        }
+
+        self.assertTrue(
+            expected_fields.issubset(user_fields)
+        )
+
+    def test_user_does_not_contain_nira_personalization_fields(self):
+        user_fields = {
+            field.name
+            for field in User._meta.get_fields()
+        }
+
+        nira_personalization_fields = {
+            "communication_style",
+            "work_info",
+            "skills",
+            "interests",
+            "custom_instructions",
+            "privacy_settings",
+            "memory_settings",
+        }
+
+        self.assertTrue(
+            user_fields.isdisjoint(
+                nira_personalization_fields
+            )
+        )
+
+    def test_nira_personal_profile_has_expected_fields(self):
+        from .models import NIRAPersonalProfile
+
+        profile_fields = {
+            field.name
+            for field in NIRAPersonalProfile._meta.get_fields()
+        }
+
+        expected_fields = {
+            "user",
+            "languages",
+            "communication_style",
+            "work_info",
+            "skills",
+            "interests",
+            "important_people",
+            "custom_instructions",
+            "privacy_settings",
+            "memory_settings",
+            "created_at",
+            "updated_at",
+        }
+
+        self.assertTrue(
+            expected_fields.issubset(profile_fields)
+        )
+
+    def test_nira_personal_profile_has_one_to_one_user_relationship(self):
+        from .models import NIRAPersonalProfile
+
+        user_field = NIRAPersonalProfile._meta.get_field("user")
+
+        self.assertTrue(user_field.one_to_one)
+
+    def test_nira_personal_profile_accepts_valid_data(self):
+        from .models import NIRAPersonalProfile
+
+        profile = NIRAPersonalProfile(
+            user=self._create_test_user(),
+            languages=["English", "Hindi"],
+            communication_style={"tone": "friendly"},
+            work_info={"role": "Developer"},
+            skills=["Python"],
+            interests=["AI"],
+            important_people=[],
+            custom_instructions="Be concise.",
+            privacy_settings={"profile_visibility": "private"},
+            memory_settings={"enabled": True},
+        )
+
+        profile.full_clean()
+
+    def test_nira_personal_profile_rejects_non_list_collection_fields(self):
+        from django.core.exceptions import ValidationError
+        from .models import NIRAPersonalProfile
+
+        profile = NIRAPersonalProfile(
+            user=self._create_test_user(),
+            languages="English",
+        )
+
+        with self.assertRaises(ValidationError):
+            profile.full_clean()
+
+    def test_nira_personal_profile_rejects_non_dict_settings_fields(self):
+        from django.core.exceptions import ValidationError
+        from .models import NIRAPersonalProfile
+
+        profile = NIRAPersonalProfile(
+            user=self._create_test_user(),
+            communication_style="friendly",
+        )
+
+        with self.assertRaises(ValidationError):
+            profile.full_clean()
+
+    def test_nira_personal_profile_serializer_contains_expected_fields(self):
+        serializer = NIRAPersonalProfileSerializer()
+
+        expected_fields = {
+            "id",
+            "user",
+            "languages",
+            "communication_style",
+            "work_info",
+            "skills",
+            "interests",
+            "important_people",
+            "custom_instructions",
+            "privacy_settings",
+            "memory_settings",
+            "created_at",
+            "updated_at",
+        }
+
+        self.assertEqual(
+            set(serializer.fields.keys()),
+            expected_fields,
+        )
+
+    def test_nira_personal_profile_serializer_has_read_only_fields(self):
+        serializer = NIRAPersonalProfileSerializer()
+
+        read_only_fields = {
+            field_name
+            for field_name, field in serializer.fields.items()
+            if field.read_only
+        }
+
+        expected_read_only_fields = {
+            "id",
+            "user",
+            "created_at",
+            "updated_at",
+        }
+
+        self.assertEqual(
+            read_only_fields,
+            expected_read_only_fields,
+        )
+
+    def test_nira_personal_profile_serializer_serializes_profile(self):
+        profile = self._create_test_profile()
+
+        serializer = NIRAPersonalProfileSerializer(profile)
+
+        self.assertEqual(
+            serializer.data["user"],
+            self.user.id,
+        )
+        self.assertEqual(
+            serializer.data["languages"],
+            [],
+        )
+        self.assertEqual(
+            serializer.data["skills"],
+            [],
+        )
+        self.assertEqual(
+            serializer.data["interests"],
+            [],
+        )
+        self.assertEqual(
+            serializer.data["important_people"],
+            [],
+        )
+
+    def test_nira_personal_profile_serializer_validates_profile_data(self):
+        self._create_test_user()
+
+        serializer = NIRAPersonalProfileSerializer(
+            data={
+                "languages": ["English"],
+                "communication_style": {
+                    "tone": "professional",
+                },
+                "work_info": {
+                    "role": "Backend Developer",
+                },
+                "skills": ["Python", "Django"],
+                "interests": ["AI"],
+                "important_people": [],
+                "custom_instructions": "Keep responses concise.",
+                "privacy_settings": {
+                    "profile_visibility": "private",
+                },
+                "memory_settings": {
+                    "enabled": True,
+                },
+            }
+        )
+
+        self.assertTrue(
+            serializer.is_valid(),
+            serializer.errors,
+        )
+
+    def test_nira_personal_profile_serializer_rejects_invalid_collection_data(self):
+        self._create_test_user()
+
+        serializer = NIRAPersonalProfileSerializer(
+            data={
+                "languages": "English",
+                "skills": "Python",
+                "interests": "AI",
+                "important_people": {},
+            }
+        )
+
+        self.assertTrue(
+            serializer.is_valid(),
+            serializer.errors,
+        )
+
+        profile = NIRAPersonalProfile(
+            user=self.user,
+            languages="English",
+            skills="Python",
+            interests="AI",
+            important_people={},
+        )
+
+        with self.assertRaises(ValidationError):
+            profile.full_clean()         
+
+    def test_get_nira_personal_profile_returns_user_profile(self):
+        profile = self._create_test_profile()
+
+        result = get_nira_personal_profile(self.user)
+
+        self.assertEqual(result, profile)
+
+    def test_create_nira_personal_profile_creates_profile(self):
+        self._create_test_user()
+
+        profile = create_nira_personal_profile(
+            self.user,
+            languages=["English"],
+            skills=["Python"],
+        )
+
+        self.assertEqual(profile.user, self.user)
+        self.assertEqual(profile.languages, ["English"])
+        self.assertEqual(profile.skills, ["Python"])
+
+    def test_update_nira_personal_profile_updates_profile(self):
+        profile = self._create_test_profile()
+
+        result = update_nira_personal_profile(
+            profile,
+            skills=["Python", "Django"],
+        )
+
+        self.assertEqual(result.skills, ["Python", "Django"])
+
+    def test_validate_nira_personal_profile_returns_valid_profile(self):
+        profile = self._create_test_profile()
+
+        result = validate_nira_personal_profile(profile)
+
+        self.assertEqual(result, profile)
+
+    def test_get_or_create_nira_personal_profile_creates_default_profile(self):
+        self._create_test_user()
+
+        profile, created = get_or_create_nira_personal_profile(
+            self.user
+        )
+
+        self.assertTrue(created)
+        self.assertEqual(profile.user, self.user)
+
+    def test_get_or_create_nira_personal_profile_returns_existing_profile(self):
+        profile = self._create_test_profile()
+
+        result, created = get_or_create_nira_personal_profile(
+            self.user
+        )
+
+        self.assertFalse(created)
+        self.assertEqual(result, profile)
+
+    def test_ensure_nira_profile_owner_accepts_owner(self):
+        profile = self._create_test_profile()
+
+        result = ensure_nira_profile_owner(
+            profile,
+            self.user,
+        )
+
+        self.assertEqual(result, profile)
+
+    def test_ensure_nira_profile_owner_rejects_different_user(self):
+        profile = self._create_test_profile()
+
+        another_user = User.objects.create_user(
+            username="another_nira_user",
+            email="another_nira_user@example.com",
+            password="StrongPass123",
+        )
+
+        with self.assertRaises(PermissionError):
+            ensure_nira_profile_owner(
+                profile,
+                another_user,
+            )        
+
+    def test_get_nira_personal_profile_returns_user_profile(self):
+        profile = self._create_test_profile()
+
+        result = get_nira_personal_profile(self.user)
+
+        self.assertEqual(result, profile)
+
+    def test_create_nira_personal_profile_creates_profile(self):
+        self._create_test_user()
+
+        profile = create_nira_personal_profile(
+            self.user,
+            languages=["English"],
+            skills=["Python"],
+        )
+
+        self.assertEqual(profile.user, self.user)
+        self.assertEqual(profile.languages, ["English"])
+        self.assertEqual(profile.skills, ["Python"])
+
+    def test_update_nira_personal_profile_updates_profile(self):
+        profile = self._create_test_profile()
+
+        result = update_nira_personal_profile(
+            profile,
+            skills=["Python", "Django"],
+        )
+
+        self.assertEqual(result.skills, ["Python", "Django"])
+
+    def test_validate_nira_personal_profile_returns_valid_profile(self):
+        profile = self._create_test_profile()
+
+        result = validate_nira_personal_profile(profile)
+
+        self.assertEqual(result, profile)
+
+    def test_get_or_create_nira_personal_profile_creates_default_profile(self):
+        self._create_test_user()
+
+        profile, created = get_or_create_nira_personal_profile(
+            self.user
+        )
+
+        self.assertTrue(created)
+        self.assertEqual(profile.user, self.user)
+
+    def test_get_or_create_nira_personal_profile_returns_existing_profile(self):
+        profile = self._create_test_profile()
+
+        result, created = get_or_create_nira_personal_profile(
+            self.user
+        )
+
+        self.assertFalse(created)
+        self.assertEqual(result, profile)
+
+    def test_ensure_nira_profile_owner_accepts_owner(self):
+        profile = self._create_test_profile()
+
+        result = ensure_nira_profile_owner(
+            profile,
+            self.user,
+        )
+
+        self.assertEqual(result, profile)
+
+    def test_ensure_nira_profile_owner_rejects_different_user(self):
+        profile = self._create_test_profile()
+
+        another_user = User.objects.create_user(
+            username="another_nira_user",
+            email="another_nira_user@example.com",
+            password="StrongPass123",
+        )
+
+        with self.assertRaises(PermissionError):
+            ensure_nira_profile_owner(
+                profile,
+                another_user,
+            )   
+
+    def test_nira_personal_profile_serializer_contains_expected_fields(self):
+        serializer = NIRAPersonalProfileSerializer()
+
+        expected_fields = {
+            "id",
+            "user",
+            "languages",
+            "communication_style",
+            "work_info",
+            "skills",
+            "interests",
+            "important_people",
+            "custom_instructions",
+            "privacy_settings",
+            "memory_settings",
+            "created_at",
+            "updated_at",
+        }
+
+        self.assertEqual(
+            set(serializer.fields.keys()),
+            expected_fields,
+        )
+
+
+    def test_nira_personal_profile_serializer_has_read_only_fields(self):
+        serializer = NIRAPersonalProfileSerializer()
+
+        read_only_fields = {
+            field_name
+            for field_name, field in serializer.fields.items()
+            if field.read_only
+        }
+
+        expected_read_only_fields = {
+            "id",
+            "user",
+            "created_at",
+            "updated_at",
+        }
+
+        self.assertEqual(
+            read_only_fields,
+            expected_read_only_fields,
+        )
+
+
+    def test_nira_personal_profile_serializer_serializes_profile(self):
+        profile = self._create_test_profile()
+
+        serializer = NIRAPersonalProfileSerializer(profile)
+
+        self.assertEqual(
+            serializer.data["user"],
+            self.user.id,
+        )
+        self.assertEqual(
+            serializer.data["languages"],
+            [],
+        )
+        self.assertEqual(
+            serializer.data["skills"],
+            [],
+        )
+        self.assertEqual(
+            serializer.data["interests"],
+            [],
+        )
+        self.assertEqual(
+            serializer.data["important_people"],
+            [],
+        )
+
+
+    def test_nira_personal_profile_serializer_validates_profile_data(self):
+        self._create_test_user()
+
+        serializer = NIRAPersonalProfileSerializer(
+            data={
+                "languages": ["English"],
+                "communication_style": {
+                    "tone": "professional",
+                },
+                "work_info": {
+                    "role": "Backend Developer",
+                },
+                "skills": ["Python", "Django"],
+                "interests": ["AI"],
+                "important_people": [],
+                "custom_instructions": "Keep responses concise.",
+                "privacy_settings": {
+                    "profile_visibility": "private",
+                },
+                "memory_settings": {
+                    "enabled": True,
+                },
+            }
+        )
+
+        self.assertTrue(
+            serializer.is_valid(),
+            serializer.errors,
+        )
+
+
+    def test_nira_personal_profile_serializer_rejects_invalid_collection_data(self):
+        self._create_test_user()
+
+        serializer = NIRAPersonalProfileSerializer(
+            data={
+                "languages": "English",
+                "skills": "Python",
+                "interests": "AI",
+                "important_people": {},
+            }
+        )
+
+        self.assertTrue(
+            serializer.is_valid(),
+            serializer.errors,
+        )
+
+        profile = NIRAPersonalProfile(
+            user=self.user,
+            languages="English",
+            skills="Python",
+            interests="AI",
+            important_people={},
+        )
+
+        with self.assertRaises(ValidationError):
+            profile.full_clean()   
+
+    def test_nira_personal_profile_api_requires_authentication(self):
+        response = self.client.get(
+            "/api/auth/nira-profile/"
+        )
+
+        self.assertEqual(
+            response.status_code,
+            401,
+        )
+
+    def test_nira_personal_profile_api_returns_profile(self):
+        self._create_test_user()
+
+        self.client.force_authenticate(
+            user=self.user,
+        )
+
+        response = self.client.get(
+            "/api/auth/nira-profile/"
+        )
+
+        self.assertEqual(
+            response.status_code,
+            200,
+        )
+        self.assertEqual(
+            response.data["user"],
+            self.user.id,
+        )
+
+    def test_nira_personal_profile_api_returns_expected_profile_fields(self):
+        self._create_test_user()
+
+        self.client.force_authenticate(
+            user=self.user,
+        )
+
+        response = self.client.get(
+            "/api/auth/nira-profile/"
+        )
+
+        self.assertEqual(
+            response.status_code,
+            200,
+        )
+
+        expected_fields = {
+            "id",
+            "user",
+            "languages",
+            "communication_style",
+            "work_info",
+            "skills",
+            "interests",
+            "important_people",
+            "custom_instructions",
+            "privacy_settings",
+            "memory_settings",
+            "created_at",
+            "updated_at",
+        }
+
+        self.assertEqual(
+            set(response.data.keys()),
+            expected_fields,
+        )    
+
+    def test_nira_personal_profile_api_creates_missing_profile(self):
+        self._create_test_user()
+
+        self.client.force_authenticate(
+            user=self.user,
+        )
+
+        self.assertFalse(
+            NIRAPersonalProfile.objects.filter(
+                user=self.user,
+            ).exists()
+        )
+
+        response = self.client.get(
+            "/api/auth/nira-profile/"
+        )
+
+        self.assertEqual(
+            response.status_code,
+            200,
+        )
+        self.assertTrue(
+            NIRAPersonalProfile.objects.filter(
+                user=self.user,
+            ).exists()
+        )
+
+    def test_nira_personal_profile_api_does_not_return_another_users_profile(self):
+        self._create_test_user()
+
+        profile = self._create_test_profile()
+
+        another_user = User.objects.create_user(
+            username="nira_api_other_user",
+            email="nira_api_other@example.com",
+            password="StrongPass123",
+        )
+
+        self.client.force_authenticate(
+            user=another_user,
+        )
+
+        response = self.client.get(
+            "/api/auth/nira-profile/"
+        )
+
+        self.assertEqual(
+            response.status_code,
+            200,
+        )
+        self.assertNotEqual(
+            response.data["user"],
+            profile.user_id,
+        )
+        self.assertEqual(
+            response.data["user"],
+            another_user.id,
+        ) 
+
+    def test_nira_personal_profile_api_patch_does_not_modify_another_users_profile(self):
+        self._create_test_user()
+
+        other_user = User.objects.create_user(
+            username="nira_other_user",
+            email="nira_other_user@example.com",
+            password="StrongPass123",
+        )
+
+        other_profile = NIRAPersonalProfile.objects.create(
+            user=other_user,
+            skills=["Original Skill"],
+        )
+
+        self.client.force_authenticate(
+            user=self.user,
+        )
+
+        response = self.client.patch(
+            "/api/auth/nira-profile/",
+            {
+                "skills": ["Modified Skill"],
+            },
+            format="json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            200,
+        )
+
+        other_profile.refresh_from_db()
+
+        self.assertEqual(
+            other_profile.skills,
+            ["Original Skill"],
+        )         
+
+    def test_nira_personal_profile_api_updates_profile(self):
+        self._create_test_user()
+
+        self.client.force_authenticate(
+            user=self.user,
+        )
+
+        response = self.client.patch(
+            "/api/auth/nira-profile/",
+            {
+                "skills": ["Python", "Django"],
+                "interests": ["AI", "Machine Learning"],
+                "custom_instructions": "Keep responses concise.",
+            },
+            format="json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            200,
+        )
+        self.assertEqual(
+            response.data["skills"],
+            ["Python", "Django"],
+        )
+        self.assertEqual(
+            response.data["interests"],
+            ["AI", "Machine Learning"],
+        )
+        self.assertEqual(
+            response.data["custom_instructions"],
+            "Keep responses concise.",
+        )
+
+    def test_nira_personal_profile_api_requires_authentication_for_patch(self):
+        response = self.client.patch(
+            "/api/auth/nira-profile/",
+            {
+                "skills": ["Python"],
+            },
+            format="json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            401,
+        )
+
+    def test_nira_personal_profile_api_patch_preserves_existing_fields(self):
+        self._create_test_user()
+
+        self.client.force_authenticate(
+            user=self.user,
+        )
+
+        profile = self._create_test_profile()
+        profile.skills = ["Python"]
+        profile.interests = ["AI"]
+        profile.custom_instructions = "Be concise."
+        profile.save()
+
+        response = self.client.patch(
+            "/api/auth/nira-profile/",
+            {
+                "skills": ["Python", "Django"],
+            },
+            format="json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            200,
+        )
+        self.assertEqual(
+            response.data["skills"],
+            ["Python", "Django"],
+        )
+        self.assertEqual(
+            response.data["interests"],
+            ["AI"],
+        )
+        self.assertEqual(
+            response.data["custom_instructions"],
+            "Be concise.",
+        )  
+
+    def test_nira_personal_profile_api_patch_returns_validation_error(self):
+        self._create_test_user()
+
+        self.client.force_authenticate(
+            user=self.user,
+        )
+
+        response = self.client.patch(
+            "/api/auth/nira-profile/",
+            {
+                "skills": {
+                    "invalid": "collection",
+                },
+            },
+            format="json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            400,
+        )
+
+        self.assertIn(
+            "skills",
+            response.data,
+        )  
+
+    def test_preferred_language_is_reused_from_user_account(self):
+        self.assertTrue(
+            hasattr(User, "preferred_language_ref"),
+        )
+
+        profile_fields = {
+            field.name
+            for field in NIRAPersonalProfile._meta.get_fields()
+        }
+
+        self.assertNotIn(
+            "preferred_language",
+            profile_fields,
+        )                  
+
+    def test_voice_language_is_reused_from_user_account(self):
+        self.assertTrue(
+            hasattr(User, "voice_language_ref"),
+        )
+
+        profile_fields = {
+            field.name
+            for field in NIRAPersonalProfile._meta.get_fields()
+        }
+
+        self.assertNotIn(
+            "voice_language",
+            profile_fields,
+        )         
+
+    def test_response_style_is_stored_in_communication_style(self):
+        profile_fields = {
+            field.name
+            for field in NIRAPersonalProfile._meta.get_fields()
+        }
+
+        self.assertIn(
+            "communication_style",
+            profile_fields,
+        )
+
+        self.assertNotIn(
+            "response_style",
+            profile_fields,
+        )    
+
+    def test_formality_preference_is_stored_in_communication_style(self):
+        profile_fields = {
+            field.name
+            for field in NIRAPersonalProfile._meta.get_fields()
+        }
+
+        self.assertIn(
+            "communication_style",
+            profile_fields,
+        )
+
+        self.assertNotIn(
+            "formality",
+            profile_fields,
+        )
+
+        self.assertNotIn(
+            "formal_casual",
+            profile_fields,
+        )    
+
+    def test_response_length_is_stored_in_communication_style(self):
+        profile_fields = {
+            field.name
+            for field in NIRAPersonalProfile._meta.get_fields()
+        }
+
+        self.assertIn(
+            "communication_style",
+            profile_fields,
+        )
+
+        self.assertNotIn(
+            "response_length",
+            profile_fields,
+        )    
+
+    def test_channel_preferences_are_stored_in_communication_style(self):
+        profile_fields = {
+            field.name
+            for field in NIRAPersonalProfile._meta.get_fields()
+        }
+
+        self.assertIn(
+            "communication_style",
+            profile_fields,
+        )
+
+        self.assertNotIn(
+            "channel_preferences",
+            profile_fields,
+        )    
+
+    def test_communication_style_supports_channel_specific_preferences(self):
+        profile = self._create_test_profile()
+
+        profile.communication_style = {
+            "response_style": "concise",
+            "formality": "professional",
+            "response_length": "short",
+            "channels": {
+                "whatsapp": {
+                    "response_length": "short",
+                },
+                "sms": {
+                    "response_length": "very_short",
+                },
+                "call": {
+                    "response_style": "conversational",
+                },
+            },
+        }
+
+        profile.full_clean()
+
+        self.assertEqual(
+            profile.communication_style["channels"]["whatsapp"][
+                "response_length"
+            ],
+            "short",
+        )
+
+        self.assertEqual(
+            profile.communication_style["channels"]["sms"][
+                "response_length"
+            ],
+            "very_short",
+        )
+
+        self.assertEqual(
+            profile.communication_style["channels"]["call"][
+                "response_style"
+            ],
+            "conversational",
+        )    
+
+    def test_communication_style_supports_all_phase_2_preferences(self):
+        profile = self._create_test_profile()
+
+        profile.communication_style = {
+            "response_style": "clear",
+            "formality": "professional",
+            "response_length": "concise",
+            "channels": {
+                "whatsapp": {
+                    "response_length": "short",
+                },
+                "sms": {
+                    "response_length": "very_short",
+                },
+                "call": {
+                    "response_style": "conversational",
+                },
+            },
+        }
+
+        profile.full_clean()
+
+        communication_style = profile.communication_style
+
+        self.assertEqual(
+            communication_style["response_style"],
+            "clear",
+        )
+
+        self.assertEqual(
+            communication_style["formality"],
+            "professional",
+        )
+
+        self.assertEqual(
+            communication_style["response_length"],
+            "concise",
+        )
+
+        self.assertIn(
+            "channels",
+            communication_style,
+        )
+
+        self.assertIn(
+            "whatsapp",
+            communication_style["channels"],
+        )
+
+        self.assertIn(
+            "sms",
+            communication_style["channels"],
+        )
+
+        self.assertIn(
+            "call",
+            communication_style["channels"],
+        )    
+
+    def test_professional_communication_uses_custom_instructions(self):
+        profile_fields = {
+            field.name
+            for field in NIRAPersonalProfile._meta.get_fields()
+        }
+
+        self.assertIn(
+            "custom_instructions",
+            profile_fields,
+        )
+
+        self.assertNotIn(
+            "professional_communication",
+            profile_fields,
+        )    
+
+    def test_preferred_response_behavior_uses_custom_instructions(self):
+        profile_fields = {
+            field.name
+            for field in NIRAPersonalProfile._meta.get_fields()
+        }
+
+        self.assertIn(
+            "custom_instructions",
+            profile_fields,
+        )
+
+        self.assertNotIn(
+            "preferred_response_behavior",
+            profile_fields,
+        )    
+
+    def test_always_ask_before_sending_uses_custom_instructions(self):
+        profile_fields = {
+            field.name
+            for field in NIRAPersonalProfile._meta.get_fields()
+        }
+
+        self.assertIn(
+            "custom_instructions",
+            profile_fields,
+        )
+
+        self.assertNotIn(
+            "always_ask_before_sending",
+            profile_fields,
+        )    
+
+    def test_unknown_contact_rule_uses_custom_instructions(self):
+        profile_fields = {
+            field.name
+            for field in NIRAPersonalProfile._meta.get_fields()
+        }
+
+        self.assertIn(
+            "custom_instructions",
+            profile_fields,
+        )
+
+        self.assertNotIn(
+            "unknown_contact_rule",
+            profile_fields,
+        )    
+
+    def test_language_preferences_rule_uses_custom_instructions(self):
+        profile_fields = {
+            field.name
+            for field in NIRAPersonalProfile._meta.get_fields()
+        }
+
+        self.assertIn(
+            "custom_instructions",
+            profile_fields,
+        )
+
+        self.assertNotIn(
+            "language_preferences_rule",
+            profile_fields,
+        )    
+
+    def test_personal_rules_use_custom_instructions(self):
+        profile_fields = {
+            field.name
+            for field in NIRAPersonalProfile._meta.get_fields()
+        }
+
+        self.assertIn(
+            "custom_instructions",
+            profile_fields,
+        )
+
+        self.assertNotIn(
+            "personal_rules",
+            profile_fields,
+        )    
+
+    def test_custom_instructions_store_user_defined_rules(self):
+        profile = self._create_test_profile()
+
+        profile.custom_instructions = (
+            "Use professional communication. "
+            "Keep responses concise. "
+            "Always ask before sending messages. "
+            "Do not reply to unknown contacts. "
+            "Reply in Hindi unless I request another language. "
+            "Ask when my request is ambiguous."
+        )
+
+        profile.full_clean()
+        profile.save()
+
+        profile.refresh_from_db()
+
+        self.assertIn(
+            "Use professional communication.",
+            profile.custom_instructions,
+        )
+
+        self.assertIn(
+            "Always ask before sending messages.",
+            profile.custom_instructions,
+        )
+
+        self.assertIn(
+            "Do not reply to unknown contacts.",
+            profile.custom_instructions,
+        )
+
+        self.assertIn(
+            "Reply in Hindi unless I request another language.",
+            profile.custom_instructions,
+        )
+
+        self.assertIn(
+            "Ask when my request is ambiguous.",
+            profile.custom_instructions,
+        )    
+
+    def test_custom_instructions_are_preserved_during_profile_update(self):
+        profile = self._create_test_profile()
+
+        profile.custom_instructions = (
+            "Always ask before sending messages."
+        )
+        profile.save()
+
+        from users.profile_services import (
+            update_nira_personal_profile,
+        )
+
+        update_nira_personal_profile(
+            profile,
+            interests=["AI", "Python"],
+        )
+
+        profile.refresh_from_db()
+
+        self.assertEqual(
+            profile.custom_instructions,
+            "Always ask before sending messages.",
+        )
+
+        self.assertEqual(
+            profile.interests,
+            ["AI", "Python"],
+        )    
+
+    def test_empty_custom_instructions_are_valid(self):
+        profile = self._create_test_profile()
+
+        profile.custom_instructions = ""
+
+        profile.full_clean()
+        profile.save()
+
+        profile.refresh_from_db()
+
+        self.assertEqual(
+            profile.custom_instructions,
+            "",
+        )    
+
+    def test_profile_privacy_uses_privacy_settings(self):
+        profile_fields = {
+            field.name
+            for field in NIRAPersonalProfile._meta.get_fields()
+        }
+
+        self.assertIn(
+            "privacy_settings",
+            profile_fields,
+        )
+
+        self.assertNotIn(
+            "profile_privacy",
+            profile_fields,
+        )    
+
+    def test_ai_usage_control_uses_privacy_settings(self):
+        profile_fields = {
+            field.name
+            for field in NIRAPersonalProfile._meta.get_fields()
+        }
+
+        self.assertIn(
+            "privacy_settings",
+            profile_fields,
+        )
+
+        self.assertNotIn(
+            "ai_usage_enabled",
+            profile_fields,
+        )    
+
+    def test_memory_permission_uses_memory_settings(self):
+        profile_fields = {
+            field.name
+            for field in NIRAPersonalProfile._meta.get_fields()
+        }
+
+        self.assertIn(
+            "memory_settings",
+            profile_fields,
+        )
+
+        self.assertNotIn(
+            "memory_permission",
+            profile_fields,
+        )    
+
+    def test_cloud_ai_preference_uses_privacy_settings(self):
+        profile_fields = {
+            field.name
+            for field in NIRAPersonalProfile._meta.get_fields()
+        }
+
+        self.assertIn(
+            "privacy_settings",
+            profile_fields,
+        )
+
+        self.assertNotIn(
+            "cloud_ai_preference",
+            profile_fields,
+        )    
+
+    def test_sensitive_information_controls_use_privacy_settings(self):
+        profile_fields = {
+            field.name
+            for field in NIRAPersonalProfile._meta.get_fields()
+        }
+
+        self.assertIn(
+            "privacy_settings",
+            profile_fields,
+        )
+
+        self.assertNotIn(
+            "sensitive_information_controls",
+            profile_fields,
+        )    
+
+    def test_profile_deletion_is_supported_by_user_ownership(self):
+        profile_fields = {
+            field.name
+            for field in NIRAPersonalProfile._meta.get_fields()
+        }
+
+        self.assertIn(
+            "user",
+            profile_fields,
+        )
+
+        self.assertEqual(
+            NIRAPersonalProfile._meta.get_field("user").one_to_one,
+            True,
+        )    
+
+    def test_privacy_and_ai_controls_store_expected_settings(self):
+        profile = self._create_test_profile()
+
+        profile.privacy_settings = {
+            "profile_visible_to_ai": True,
+            "ai_usage_enabled": True,
+            "cloud_ai_enabled": False,
+            "sensitive_information": {
+                "allow_processing": False,
+            },
+        }
+
+        profile.memory_settings = {
+            "enabled": True,
+        }
+
+        profile.full_clean()
+        profile.save()
+
+        profile.refresh_from_db()
+
+        self.assertTrue(
+            profile.privacy_settings["profile_visible_to_ai"],
+        )
+
+        self.assertTrue(
+            profile.privacy_settings["ai_usage_enabled"],
+        )
+
+        self.assertFalse(
+            profile.privacy_settings["cloud_ai_enabled"],
+        )
+
+        self.assertFalse(
+            profile.privacy_settings["sensitive_information"][
+                "allow_processing"
+            ],
+        )
+
+        self.assertTrue(
+            profile.memory_settings["enabled"],
+        )    
+
+    def test_privacy_and_ai_controls_can_be_disabled(self):
+        profile = self._create_test_profile()
+
+        profile.privacy_settings = {
+            "profile_visible_to_ai": False,
+            "ai_usage_enabled": False,
+            "cloud_ai_enabled": False,
+            "sensitive_information": {
+                "allow_processing": False,
+            },
+        }
+
+        profile.memory_settings = {
+            "enabled": False,
+        }
+
+        profile.full_clean()
+        profile.save()
+
+        profile.refresh_from_db()
+
+        self.assertFalse(
+            profile.privacy_settings["profile_visible_to_ai"],
+        )
+
+        self.assertFalse(
+            profile.privacy_settings["ai_usage_enabled"],
+        )
+
+        self.assertFalse(
+            profile.privacy_settings["cloud_ai_enabled"],
+        )
+
+        self.assertFalse(
+            profile.privacy_settings["sensitive_information"][
+                "allow_processing"
+            ],
+        )
+
+        self.assertFalse(
+            profile.memory_settings["enabled"],
+        )    
 
 class UserLoginAPITestCase(APITestCase):
     def setUp(self):

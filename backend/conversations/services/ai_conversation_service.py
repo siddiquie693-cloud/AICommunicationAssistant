@@ -18,6 +18,9 @@ from knowledge.services.rag import RAGService
 from knowledge.services.retrieval import KnowledgeRetrievalService
 from knowledge.services.vector_store.mock import MockVectorStore
 
+from knowledge.services.profile_context import (
+    NIRAPersonalProfileContextService,
+)
 
 class AIConversationService:
     """
@@ -54,6 +57,10 @@ class AIConversationService:
             )
 
         self.rag_service = rag_service
+
+        self.profile_context_service = (
+            NIRAPersonalProfileContextService()
+        )
 
         if translation_service is None:
             translation_service = get_translation_service()
@@ -126,6 +133,30 @@ class AIConversationService:
 
         return messages
 
+    def _build_profile_context(
+        self,
+        conversation: Conversation,
+        *,
+        context_purpose: str = "general",
+    ) -> str:
+        profile = conversation.user.nira_personal_profile
+
+        return self.profile_context_service.build(
+            profile,
+            context_purpose=context_purpose,
+        )
+
+    def _build_ai_profile_context(
+        self,
+        conversation: Conversation,
+        *,
+        context_purpose: str = "general",
+    ) -> str:
+        return self._build_profile_context(
+            conversation,
+            context_purpose=context_purpose,
+        )
+
     def generate_response(
         self,
         conversation: Conversation,
@@ -134,6 +165,7 @@ class AIConversationService:
         rag_context: str | None = None,
         rag_top_k: int = 5,
         target_language: str | None = None,
+        profile_context_purpose: str = "general",
     ) -> Message:
         """
         Generate an AI response using the conversation history.
@@ -150,14 +182,31 @@ class AIConversationService:
                 top_k=rag_top_k,
             )
 
+        profile_context = self._build_profile_context(
+            conversation,
+            context_purpose=profile_context_purpose,
+        )    
+
         prompt = user_message.content
 
-        if rag_context:
-            prompt = (
-                "Use the following knowledge context to help answer the user.\n\n"
-                f"Knowledge context:\n{rag_context}\n\n"
-                f"User question:\n{user_message.content}"
+        context_parts = []
+
+        if profile_context:
+            context_parts.append(
+                f"Personal profile context:\n{profile_context}"
             )
+
+        if rag_context:
+            context_parts.append(
+                f"Knowledge context:\n{rag_context}"
+            )    
+
+        context_text = "\n\n".join(context_parts)
+        prompt = (
+            "Use the following context to help answer the user.\n\n"
+            f"{context_text}\n\n"
+            f"User question:\n{user_message.content}"
+        )    
 
         response_text = self.ai_service.generate_response(
             prompt,

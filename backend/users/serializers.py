@@ -4,9 +4,11 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from datetime import timedelta
 from rest_framework_simplejwt.exceptions import TokenError
 from django.utils import timezone
+
 from .models import (
     PasswordResetToken,
     Language,
+    NIRAPersonalProfile,
 )
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 
@@ -120,6 +122,31 @@ class UserProfileSerializer(serializers.ModelSerializer):
             "email",
             "preferred_language_code",
             "voice_language_code",
+        ]
+
+class NIRAPersonalProfileSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = NIRAPersonalProfile
+        fields = [
+            "id",
+            "user",
+            "languages",
+            "communication_style",
+            "work_info",
+            "skills",
+            "interests",
+            "important_people",
+            "custom_instructions",
+            "privacy_settings",
+            "memory_settings",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = [
+            "id",
+            "user",
+            "created_at",
+            "updated_at",
         ]
   
 class ChangePasswordSerializer(serializers.Serializer):

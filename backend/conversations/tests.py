@@ -5,6 +5,10 @@ from rest_framework.test import APITestCase
 from unittest.mock import patch
 
 from ai.text_to_speech.exceptions import TextToSpeechProviderError
+from users.models import NIRAPersonalProfile
+from conversations.services.ai_conversation_service import (
+    AIConversationService,
+)
 
 from .models import Conversation, Message
 from django.utils import timezone
@@ -2120,6 +2124,423 @@ class MessageDetailAPITestCase(APITestCase):
                 id=self.other_message.id
             ).exists()
         )
+
+class AIConversationServiceTestCase(TestCase):
+    def setUp(self):
+        from users.models import User, NIRAPersonalProfile
+        from conversations.models import Conversation, Message
+
+        self.user = User.objects.create_user(
+            username="ai_profile_context_test_user",
+            email="ai_profile_context_test@example.com",
+            password="StrongPass123",
+        )
+
+        self.conversation = Conversation.objects.create(
+            user=self.user,
+            title="Profile Context Test",
+        )
+
+        self.user_message = Message.objects.create(
+            conversation=self.conversation,
+            sender_type=Message.SENDER_USER,
+            content="What should I know about Python?",
+        )
+
+        self.profile = NIRAPersonalProfile.objects.create(
+            user=self.user,
+            languages=["English"],
+            communication_style={
+                "tone": "professional",
+            },
+            interests=["AI", "Python"],
+        )
+
+    @patch(
+        "conversations.services.ai_conversation_service.AIService.generate_response"
+    )
+    def test_generate_response_uses_personal_profile_context(
+        self,
+        mock_generate_response,
+    ):
+        from conversations.services.ai_conversation_service import (
+            AIConversationService,
+        )
+
+        mock_generate_response.return_value = (
+            "Python is a programming language."
+        )
+
+        service = AIConversationService()
+
+        service.generate_response(
+            self.conversation,
+            self.user_message,
+        )
+
+        prompt = mock_generate_response.call_args.args[0]
+
+        self.assertIn(
+            "Personal profile context:",
+            prompt,
+        )
+        self.assertIn(
+            "Languages:",
+            prompt,
+        )
+        self.assertIn(
+            "English",
+            prompt,
+        )
+        self.assertIn(
+            "Communication Style:",
+            prompt,
+        )
+        self.assertIn(
+            "professional",
+            prompt,
+        )
+        self.assertIn(
+            "Interests:",
+            prompt,
+        )
+        self.assertIn(
+            "AI",
+            prompt,
+        )
+
+    @patch(
+        "conversations.services.ai_conversation_service.AIService.generate_response"
+    )
+    def test_generate_response_combines_profile_and_knowledge_context(
+        self,
+        mock_generate_response,
+    ):
+        from conversations.services.ai_conversation_service import (
+            AIConversationService,
+        )
+
+        mock_generate_response.return_value = (
+            "Python is a programming language."
+        )
+
+        service = AIConversationService()
+
+        service.generate_response(
+            self.conversation,
+            self.user_message,
+            rag_context="Python backend knowledge",
+        )
+
+        prompt = mock_generate_response.call_args.args[0]
+
+        self.assertIn(
+            "Personal profile context:",
+            prompt,
+        )
+
+        self.assertIn(
+            "Languages:",
+            prompt,
+        )
+
+        self.assertIn(
+            "English",
+            prompt,
+        )
+
+        self.assertIn(
+            "Knowledge context:",
+            prompt,
+        )
+
+        self.assertIn(
+            "Python backend knowledge",
+            prompt,
+        )
+
+        self.assertIn(
+            "User question:",
+            prompt,
+        )
+
+        self.assertIn(
+            self.user_message.content,
+            prompt,
+        )   
+
+    def test_generate_response_uses_only_conversation_user_profile(self):
+        from conversations.services.ai_conversation_service import (
+            AIConversationService,
+        )
+
+        other_user = User.objects.create_user(
+            username="other_profile_user",
+            email="other_profile@example.com",
+            password="StrongPass123",
+        )
+
+        NIRAPersonalProfile.objects.create(
+            user=other_user,
+            work_info={
+                "role": "Other User Private Role",
+            },
+            skills=[
+                "Private Skill",
+            ],
+        )
+
+        service = AIConversationService()
+
+        result = service._build_ai_profile_context(
+            self.conversation,
+            context_purpose="work",
+        )
+
+        self.assertNotIn(
+            "Other User Private Role",
+            result,
+        )
+
+        self.assertNotIn(
+            "Private Skill",
+            result,
+        )     
+
+    def test_build_ai_profile_context_uses_filtered_profile_context(self):
+         
+        self.profile.work_info = {
+            "role": "Python Backend Developer",
+        }
+        self.profile.skills = [
+            "Python",
+            "Django",
+        ]
+        self.profile.privacy_settings = {
+            "share_profile": False,
+        }
+        self.profile.memory_settings = {
+            "enabled": True,
+        }
+        self.profile.save()
+
+        service = AIConversationService()
+    
+        result = service._build_ai_profile_context(
+            self.conversation,
+            context_purpose="work",
+        )
+
+        self.assertIn(
+            "Work Information:",
+            result,
+        )
+
+        self.assertIn(
+            "Python Backend Developer",
+            result,
+        )
+
+        self.assertIn(
+            "Skills:",
+            result,
+        )
+
+        self.assertIn(
+            "Python",
+            result,
+        )
+
+        self.assertNotIn(
+            "Privacy Settings:",
+            result,
+        )
+
+        self.assertNotIn(
+            "Memory Settings:",
+            result,
+        )    
+
+    @patch(
+        "conversations.services.ai_conversation_service.AIService.generate_response"
+    )
+    def test_generate_response_does_not_expose_protected_profile_context(
+        self,
+        mock_generate_response,
+    ):
+        from conversations.services.ai_conversation_service import (
+            AIConversationService,
+        )
+
+        self.profile.privacy_settings = {
+            "share_profile": False,
+        }
+        self.profile.memory_settings = {
+            "enabled": True,
+        }
+        self.profile.save()
+
+        mock_generate_response.return_value = (
+            "Python is a programming language."
+        )
+
+        service = AIConversationService()
+
+        service.generate_response(
+            self.conversation,
+            self.user_message,
+        )
+
+        prompt = mock_generate_response.call_args.args[0]
+
+        self.assertNotIn(
+            "Privacy Settings:",
+            prompt,
+        )
+        self.assertNotIn(
+            "Memory Settings:",
+            prompt,
+        )
+
+    @patch(
+        "conversations.services.ai_conversation_service.AIService.generate_response"
+    )
+    def test_generate_response_uses_requested_work_profile_context(
+        self,
+        mock_generate_response,
+    ):
+        from conversations.services.ai_conversation_service import (
+            AIConversationService,
+        )
+
+        self.profile.work_info = {
+            "role": "Python Backend Developer",
+        }
+        self.profile.skills = [
+            "Python",
+            "Django",
+        ]
+        self.profile.interests = [
+            "AI",
+        ]
+        self.profile.save()
+
+        mock_generate_response.return_value = (
+            "Python backend development requires strong API skills."
+        )
+
+        service = AIConversationService()
+
+        service.generate_response(
+            self.conversation,
+            self.user_message,
+            profile_context_purpose="work",
+        )
+
+        prompt = mock_generate_response.call_args.args[0]
+
+        self.assertIn(
+            "Work Information:",
+            prompt,
+        )
+        self.assertIn(
+            "Python Backend Developer",
+            prompt,
+        )
+        self.assertIn(
+            "Skills:",
+            prompt,
+        )
+        self.assertIn(
+            "Django",
+            prompt,
+        )
+
+        self.assertNotIn(
+            "Interests:",
+            prompt,
+        )  
+
+    @patch(
+        "conversations.services.ai_conversation_service.AIService.generate_response"
+    )
+    def test_generate_response_uses_requested_communication_profile_context(
+        self,
+        mock_generate_response,
+    ):
+        from conversations.services.ai_conversation_service import (
+            AIConversationService,
+        )
+
+        self.profile.languages = [
+            "English",
+            "Hindi",
+        ]
+        self.profile.communication_style = {
+            "tone": "professional",
+        }
+        self.profile.interests = [
+            "AI",
+        ]
+        self.profile.important_people = [
+            {"name": "Test Person"},
+        ]
+        self.profile.work_info = {
+            "role": "Developer",
+        }
+        self.profile.save()
+
+        mock_generate_response.return_value = (
+            "Here is a professional response."
+        )
+
+        service = AIConversationService()
+
+        service.generate_response(
+            self.conversation,
+            self.user_message,
+            profile_context_purpose="communication",
+        )
+
+        prompt = mock_generate_response.call_args.args[0]
+
+        self.assertIn(
+            "Languages:",
+            prompt,
+        )
+        self.assertIn(
+            "English",
+            prompt,
+        )
+        self.assertIn(
+            "Communication Style:",
+            prompt,
+        )
+        self.assertIn(
+            "professional",
+            prompt,
+        )
+        self.assertIn(
+            "Important People:",
+            prompt,
+        )
+        self.assertIn(
+            "Test Person",
+            prompt,
+        )
+
+        self.assertNotIn(
+            "Work Information:",
+            prompt,
+        )
+        self.assertNotIn(
+            "Skills:",
+            prompt,
+        )
+        self.assertNotIn(
+            "Interests:",
+            prompt,
+        )      
 
 
 class TextToSpeechAPITestCase(APITestCase):

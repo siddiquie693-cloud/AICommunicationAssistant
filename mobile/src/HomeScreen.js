@@ -41,7 +41,11 @@ import {
   getRefreshToken,
 } from './storage';
 
-export default function HomeScreen({ onLogout }) {
+export default function HomeScreen({ 
+  onLogout,
+  onOpenNIRAPersonalProfile,
+
+ }) {
   const {width} = useWindowDimensions();
 
   const horizontalPadding = width < 360 ? 16 : width < 600 ? 20 : 24;
@@ -1611,6 +1615,30 @@ export default function HomeScreen({ onLogout }) {
         </Pressable>
       </View>
 
+      {/* NIRA PERSONAL PROFILE */}
+      <View style={styles.card}>
+        <Text style={styles.cardTitle}>
+          NIRA Personal Profile
+        </Text>
+
+        <Text style={styles.cardText}>
+          Personal information, communication preferences,
+          instructions, privacy, and AI memory controls.
+        </Text>
+
+        <Pressable
+          style={styles.niraProfileButton}
+          onPress={onOpenNIRAPersonalProfile}
+          accessibilityRole="button"
+          accessibilityLabel="Open NIRA Personal Profile"
+          accessibilityHint="Opens your NIRA personal profile"
+        >
+          <Text style={styles.niraProfileButtonText}>
+            Open NIRA Profile
+          </Text>
+        </Pressable>
+      </View>
+
       {/* CONVERSATIONS */}
       <View style={styles.card}>
         <Text style={styles.cardTitle}>
@@ -1966,6 +1994,21 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: '#374151',
     marginBottom: 8,
+  },
+
+  niraProfileButton: {
+    marginTop: 16,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    backgroundColor: '#222',
+    alignItems: 'center',
+  },
+
+  niraProfileButtonText: {
+    color: '#fff',
+    fontSize: 15,
+    fontWeight: '600',
   },
 
   formLabel: {

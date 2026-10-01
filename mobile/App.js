@@ -18,6 +18,8 @@ import { login } from './src/auth';
 
 import HomeScreen from './src/HomeScreen';
 
+import NIRAPersonalProfileScreen from './src/NIRAPersonalProfileScreen';
+
 import {
   hasAccessToken,
   saveTokens,
@@ -45,6 +47,8 @@ export default function App() {
 
   const [isAuthenticated, setIsAuthenticated] =
     useState(false);
+  
+  const [activeScreen, setActiveScreen] = useState('home');  
 
   const [isOffline, setIsOffline] =
     useState(false);
@@ -168,11 +172,22 @@ export default function App() {
         />
 
         <View style={styles.homeContainer}>
-          <HomeScreen
-            onLogout={() =>
-              setIsAuthenticated(false)
-            }
-          />
+          {activeScreen === 'nira-profile' ? (
+            <NIRAPersonalProfileScreen
+              onBack={() => 
+                setActiveScreen('home')
+              }
+            />
+          ) : (
+            <HomeScreen
+              onLogout={() =>
+                setIsAuthenticated(false)
+              }
+              onOpenNIRAPersonalProfile={() =>
+                setActiveScreen('nira-profile')
+              }
+            />
+          )}
         </View>
       </View>
     );

@@ -13,6 +13,7 @@ from .models import(
     PasswordResetToken,
     Language,
 )
+from django.core.exceptions import ValidationError
 from django.utils import timezone
 from .services import (
     send_email_verification_email,
@@ -23,6 +24,7 @@ from .serializers import (
     LogoutSerializer,
     UserRegistrationSerializer,
     UserProfileSerializer,
+    NIRAPersonalProfileSerializer,
     ChangePasswordSerializer,
     EmailVerificayionSerializer,
     ForgotPasswordSerializer,
@@ -32,6 +34,12 @@ from .serializers import (
     UserLoginSerializer,
     ResendVerificationSerializer,
     LanguageSerializer,
+)
+
+from .profile_services import (
+    get_or_create_nira_personal_profile,
+    ensure_nira_profile_owner,
+    update_nira_personal_profile,
 )
 
 from django.contrib.auth import get_user_model
@@ -139,6 +147,65 @@ class UserProfileAPIView(APIView):
 
         return Response(
             serializer.data,
+            status=status.HTTP_200_OK,
+        )
+
+class NIRAPersonalProfileAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        responses={200: NIRAPersonalProfileSerializer},
+    )
+    def get(self, request):
+        profile, _ = get_or_create_nira_personal_profile(
+            request.user,
+        )
+
+        ensure_nira_profile_owner(
+            profile,
+            request.user,
+        )
+
+        serializer = NIRAPersonalProfileSerializer(profile)
+
+        return Response(
+            serializer.data,
+            status=status.HTTP_200_OK,
+        )    
+
+    @extend_schema(
+        request=NIRAPersonalProfileSerializer,
+        responses={200: NIRAPersonalProfileSerializer},
+    )
+    def patch(self, request):
+        profile, _ = get_or_create_nira_personal_profile(
+            request.user,
+        )
+
+        ensure_nira_profile_owner(
+            profile,
+            request.user,
+        )
+
+        serializer = NIRAPersonalProfileSerializer(
+            profile,
+            data=request.data,
+            partial=True,
+        )
+
+        serializer.is_valid(raise_exception=True)
+        try:
+            profile = update_nira_personal_profile(
+                profile,
+                **serializer.validated_data,
+            )
+        except ValidationError as exc:
+            return Response(
+                exc.message_dict,
+                status=status.HTTP_400_BAD_REQUEST,
+            )    
+        return Response(
+            NIRAPersonalProfileSerializer(profile).data,
             status=status.HTTP_200_OK,
         )
 
