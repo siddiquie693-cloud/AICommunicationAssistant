@@ -121,6 +121,14 @@ class NIRAPersonalProfileContextService:
             context_purpose,
             allowed_fields,
         )
+        privacy_settings = profile.privacy_settings
+
+        if (
+            context_purpose != "privacy"
+            and isinstance(privacy_settings, dict)
+            and privacy_settings.get("profile_visible_to_ai") is False
+        ):
+            return ""
 
         self._validate_exposed_fields(
             allowed_fields,

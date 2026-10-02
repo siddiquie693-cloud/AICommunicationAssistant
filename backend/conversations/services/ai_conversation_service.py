@@ -12,6 +12,7 @@ from ai.translation.service import TranslationService
 from ai.prompts.conversation import CONVERSATION_SYSTEM_PROMPT
 
 from conversations.models import Conversation, Message
+from users.profile_services import get_or_create_nira_personal_profile
 from knowledge.services.context import RAGContextBuilder
 from knowledge.services.embeddings.mock import MockEmbeddingService
 from knowledge.services.rag import RAGService
@@ -139,7 +140,9 @@ class AIConversationService:
         *,
         context_purpose: str = "general",
     ) -> str:
-        profile = conversation.user.nira_personal_profile
+        profile, _ = get_or_create_nira_personal_profile(
+            conversation.user,
+        )
 
         return self.profile_context_service.build(
             profile,
@@ -157,6 +160,87 @@ class AIConversationService:
             context_purpose=context_purpose,
         )
 
+    def _build_communication_style_instruction(
+        self,
+        conversation: Conversation,
+    ) -> str:
+        profile, _ = get_or_create_nira_personal_profile(
+            conversation.user,
+        )
+
+        communication_style = profile.communication_style
+
+        if not isinstance(communication_style, dict):
+            return ""
+
+        if not communication_style:
+            return ""
+
+        return (
+            "Apply the user's communication preferences when "
+            "generating the response. "
+            f"Communication preferences: {communication_style}"
+        )
+
+    def _build_channel_preference_instruction(
+        self,
+        conversation: Conversation,
+        *,
+        channel: str | None = None,
+    ) -> str:
+        if not channel:
+            return ""
+
+        profile, _ = get_or_create_nira_personal_profile(
+            conversation.user,
+        )
+
+        communication_style = profile.communication_style
+
+        if not isinstance(communication_style, dict):
+            return ""
+
+        channels = communication_style.get("channels")
+
+        if not isinstance(channels, dict):
+            return ""
+
+        channel_preferences = channels.get(channel)
+
+        if not isinstance(channel_preferences, dict):
+            return ""
+
+        if not channel_preferences:
+            return ""
+
+        return (
+            f"Apply the user's {channel} communication preferences "
+            "when generating the response. "
+            f"{channel.capitalize()} preferences: "
+            f"{channel_preferences}"
+        )
+
+    def _build_preferred_language_instruction(
+        self,
+        conversation: Conversation,
+    ) -> str:
+        preferred_language = (
+            conversation.user.preferred_language_ref
+        )
+
+        if not preferred_language:
+            return ""
+
+        language_name = preferred_language.name
+
+        if not language_name:
+            return ""
+
+        return (
+            "Respond in the user's preferred language. "
+            f"The preferred language is: {language_name}."
+        )
+  
     def generate_response(
         self,
         conversation: Conversation,
@@ -166,6 +250,7 @@ class AIConversationService:
         rag_top_k: int = 5,
         target_language: str | None = None,
         profile_context_purpose: str = "general",
+        channel: str | None = None,
     ) -> Message:
         """
         Generate an AI response using the conversation history.
@@ -191,10 +276,38 @@ class AIConversationService:
 
         context_parts = []
 
+        communication_style = self._build_communication_style_instruction(
+            conversation,
+        )
+
+        channel_preferences = self._build_channel_preference_instruction(
+            conversation,
+            channel=channel,
+        )
+
+        preferred_language = self._build_preferred_language_instruction(
+            conversation,
+        )
+
         if profile_context:
             context_parts.append(
                 f"Personal profile context:\n{profile_context}"
             )
+
+        if communication_style:
+            context_parts.append(
+                communication_style
+            )    
+
+        if channel_preferences:
+            context_parts.append(
+                channel_preferences
+            )    
+
+        if preferred_language:
+            context_parts.append(
+                preferred_language
+            )    
 
         if rag_context:
             context_parts.append(

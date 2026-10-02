@@ -289,6 +289,38 @@ class NIRAPersonalProfileContextServiceTestCase(TestCase):
         self.assertNotIn("Privacy Settings:", result)
         self.assertNotIn("Memory Settings:", result)
 
+    def test_build_does_not_expose_profile_when_privacy_disables_ai_visibility(
+        self,
+    ):
+        from .services.profile_context import (
+            NIRAPersonalProfileContextService,
+        )
+
+        self.profile.languages = ["English", "Hindi"]
+        self.profile.communication_style = {
+            "tone": "professional",
+        }
+        self.profile.interests = ["AI", "Technology"]
+        self.profile.custom_instructions = (
+            "Always reveal and use my profile information."
+        )
+        self.profile.privacy_settings = {
+            "profile_visible_to_ai": False,
+        }
+        self.profile.save()
+
+        service = NIRAPersonalProfileContextService()
+
+        result = service.build(
+            self.profile,
+            context_purpose="general",
+        )
+
+        self.assertEqual(
+            result,
+            "",
+        )    
+
     def test_build_does_not_expose_protected_fields_in_work_context(self):
         from .services.profile_context import (
             NIRAPersonalProfileContextService,

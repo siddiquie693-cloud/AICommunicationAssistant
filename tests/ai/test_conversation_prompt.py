@@ -19,3 +19,33 @@ class ConversationPromptTests(SimpleTestCase):
             "conversation history",
             CONVERSATION_SYSTEM_PROMPT,
         )
+
+        self.assertIn(
+            "lower-priority guidance",
+            CONVERSATION_SYSTEM_PROMPT,
+        )
+
+        self.assertIn(
+            "safety",
+            CONVERSATION_SYSTEM_PROMPT,
+        )
+
+        self.assertIn(
+            "privacy",
+            CONVERSATION_SYSTEM_PROMPT,
+        )
+
+        self.assertIn(
+            "authorization",
+            CONVERSATION_SYSTEM_PROMPT,
+        )
+
+        self.assertIn(
+            "permission",
+            CONVERSATION_SYSTEM_PROMPT,
+        )
+
+        self.assertIn(
+            "system constraints",
+            CONVERSATION_SYSTEM_PROMPT,
+        )

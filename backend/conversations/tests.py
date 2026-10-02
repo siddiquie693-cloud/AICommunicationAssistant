@@ -2267,7 +2267,80 @@ class AIConversationServiceTestCase(TestCase):
         self.assertIn(
             self.user_message.content,
             prompt,
-        )   
+        )
+
+    @patch(
+        "conversations.services.ai_conversation_service.AIService.generate_response"
+    )
+    def test_generate_response_combines_profile_conversation_and_knowledge_context(
+        self,
+        mock_generate_response,
+    ):
+        from conversations.services.ai_conversation_service import (
+            AIConversationService,
+        )
+
+        from conversations.models import Message
+
+        mock_generate_response.return_value = (
+            "Python is a programming language."
+        )
+
+        previous_message = Message.objects.create(
+            conversation=self.conversation,
+            sender_type="user",
+            content="I am working on a Django backend project.",
+        )
+
+        service = AIConversationService()
+
+        service.generate_response(
+            self.conversation,
+            self.user_message,
+            rag_context="Python backend knowledge",
+        )
+
+        prompt = mock_generate_response.call_args.args[0]
+        messages = mock_generate_response.call_args.kwargs["messages"]
+
+        self.assertIn(
+            "Personal profile context:",
+            prompt,
+        )
+
+        self.assertIn(
+            "English",
+            prompt,
+        )
+
+        self.assertIn(
+            "Knowledge context:",
+            prompt,
+        )
+
+        self.assertIn(
+            "Python backend knowledge",
+            prompt,
+        )
+
+        self.assertIn(
+            "User question:",
+            prompt,
+        )
+
+        self.assertIn(
+            self.user_message.content,
+            prompt,
+        )
+
+        self.assertTrue(
+            any(
+                message["role"] == "user"
+                and message["content"]
+                == previous_message.content
+                for message in messages
+            )
+        )       
 
     def test_generate_response_uses_only_conversation_user_profile(self):
         from conversations.services.ai_conversation_service import (
@@ -2305,7 +2378,33 @@ class AIConversationServiceTestCase(TestCase):
         self.assertNotIn(
             "Private Skill",
             result,
-        )     
+        ) 
+
+    def test_build_ai_profile_context_handles_missing_profile(self):
+        from conversations.services.ai_conversation_service import (
+            AIConversationService,
+        )
+        from users.models import User
+
+        self.profile.delete()
+
+        service = AIConversationService()
+
+        result = service._build_ai_profile_context(
+            self.conversation,
+            context_purpose="general",
+        )
+
+        self.assertEqual(
+            result,
+            "",
+        )
+
+        self.assertTrue(
+            NIRAPersonalProfile.objects.filter(
+                user=self.user,
+            ).exists()
+        )
 
     def test_build_ai_profile_context_uses_filtered_profile_context(self):
          
@@ -2540,8 +2639,470 @@ class AIConversationServiceTestCase(TestCase):
         self.assertNotIn(
             "Interests:",
             prompt,
-        )      
+        )  
 
+    @patch(
+        "conversations.services.ai_conversation_service.AIService.generate_response"
+    )
+    def test_generate_response_does_not_expose_unrelated_protected_profile_info(
+        self,
+        mock_generate_response,
+    ):
+        self.profile.languages = [
+            "English",
+        ]
+        self.profile.communication_style = {
+            "tone": "professional",
+        }
+        self.profile.privacy_settings = {
+            "allow_cloud_ai": False,
+            "sensitive_data": False,
+        }
+        self.profile.memory_settings = {
+            "enabled": True,
+            "auto_save": True,
+        }
+        self.profile.save()
+
+        mock_generate_response.return_value = (
+            "Here is a professional response."
+        )
+
+        service = AIConversationService()
+
+        service.generate_response(
+            self.conversation,
+            self.user_message,
+            profile_context_purpose="communication",
+        )
+
+        prompt = mock_generate_response.call_args.args[0]
+
+        self.assertIn(
+            "Languages:",
+            prompt,
+        )
+
+        self.assertIn(
+            "Communication Style:",
+            prompt,
+        )
+
+        self.assertNotIn(
+            "Privacy Settings:",
+            prompt,
+        )
+
+        self.assertNotIn(
+            "Memory Settings:",
+            prompt,
+        )
+
+        self.assertNotIn(
+            "allow_cloud_ai",
+            prompt,
+        )
+
+        self.assertNotIn(
+            "auto_save",
+            prompt,
+        )    
+
+    @patch(
+        "conversations.services.ai_conversation_service.AIService.generate_response"
+    )
+    def test_generate_response_combines_profile_response_preferences(
+        self,
+        mock_generate_response,
+    ):
+        from users.models import Language
+
+        preferred_language = Language.objects.get(
+            name="Hindi",
+        )
+
+        self.user.preferred_language_ref = preferred_language
+        self.user.save()
+
+        self.profile.communication_style = {
+            "response_style": "concise",
+            "formality": "formal",
+            "response_length": "short",
+            "channels": {
+                "whatsapp": {
+                    "response_length": "very_short",
+                },
+            },
+        }
+        self.profile.custom_instructions = (
+            "Always explain technical topics with a simple example."
+        )
+        self.profile.save()
+
+        mock_generate_response.return_value = (
+            "यह एक संक्षिप्त और स्पष्ट उत्तर है।"
+        )
+
+        service = AIConversationService()
+
+        response = service.generate_response(
+            self.conversation,
+            self.user_message,
+            channel="whatsapp",
+            profile_context_purpose="instructions",
+        )
+
+        prompt = mock_generate_response.call_args.args[0]
+
+        self.assertIn(
+            "preferred language",
+            prompt.lower(),
+        )
+
+        self.assertIn(
+            "Hindi",
+            prompt,
+        )
+
+        self.assertIn(
+            "response_style",
+            prompt,
+        )
+
+        self.assertIn(
+            "concise",
+            prompt,
+        )
+
+        self.assertIn(
+            "response_length",
+            prompt,
+        )
+
+        self.assertIn(
+            "very_short",
+            prompt,
+        )
+
+        self.assertIn(
+            "Custom Instructions:",
+            prompt,
+        )
+
+        self.assertIn(
+            "Always explain technical topics with a simple example.",
+            prompt,
+        )
+
+        self.assertEqual(
+            response.content,
+            "यह एक संक्षिप्त और स्पष्ट उत्तर है।",
+        )    
+
+    @patch(
+    "conversations.services.ai_conversation_service.AIService.generate_response"
+    )
+    def test_generate_response_uses_custom_nira_instructions(
+        self,
+        mock_generate_response,
+    ):
+        self.profile.custom_instructions = (
+            "Always explain technical topics with a simple example."
+        )
+        self.profile.save()
+
+        mock_generate_response.return_value = (
+            "Here is a simple example."
+        )
+
+        service = AIConversationService()
+
+        service.generate_response(
+            self.conversation,
+            self.user_message,
+            profile_context_purpose="instructions",
+        )
+
+        prompt = mock_generate_response.call_args.args[0]
+
+        self.assertIn(
+            "Custom Instructions:",
+            prompt,
+        )
+
+        self.assertIn(
+            "Always explain technical topics with a simple example.",
+            prompt,
+        )    
+
+    @patch(
+    "conversations.services.ai_conversation_service.AIService.generate_response"
+    )
+    def test_generate_response_applies_communication_preferences(
+        self,
+        mock_generate_response,
+    ):
+        self.profile.communication_style = {
+            "tone": "professional",
+            "formality": "formal",
+        }
+        self.profile.save()
+
+        mock_generate_response.return_value = (
+            "Here is a professional response."
+        )
+
+        service = AIConversationService()
+
+        service.generate_response(
+            self.conversation,
+            self.user_message,
+        )
+
+        prompt = mock_generate_response.call_args.args[0]
+
+        self.assertIn(
+            "Apply the user's communication preferences",
+            prompt,
+        )
+
+        self.assertIn(
+            "Communication preferences:",
+            prompt,
+        )
+
+        self.assertIn(
+            "professional",
+            prompt,
+        )
+
+        self.assertIn(
+            "formal",
+            prompt,
+        )     
+
+    @patch(
+        "conversations.services.ai_conversation_service.AIService.generate_response"
+    )
+    def test_generate_response_profile_aware_response_remains_natural(
+        self,
+        mock_generate_response,
+    ):
+        self.profile.communication_style = {
+            "tone": "professional",
+            "formality": "formal",
+            "response_length": "short",
+        }
+        self.profile.save()
+
+        mock_generate_response.return_value = (
+            "Here is a concise professional response "
+            "that directly addresses your question."
+        )
+
+        service = AIConversationService()
+
+        response = service.generate_response(
+            self.conversation,
+            self.user_message,
+        )
+
+        self.assertEqual(
+            response.content,
+            "Here is a concise professional response "
+            "that directly addresses your question.",
+        )
+
+        self.assertNotEqual(
+            response.content.strip(),
+            "",
+        )
+
+        self.assertNotIn(
+            "Communication preferences:",
+            response.content,
+        )
+
+        self.assertNotIn(
+            "Personal profile context:",
+            response.content,
+        )
+
+        self.assertNotIn(
+            "Knowledge context:",
+            response.content,
+        )     
+
+    @patch(
+    "conversations.services.ai_conversation_service.AIService.generate_response"
+    )
+    def test_generate_response_uses_response_style(
+        self,
+        mock_generate_response,
+    ):
+        self.profile.communication_style = {
+            "response_style": "concise",
+        }
+        self.profile.save()
+
+        mock_generate_response.return_value = (
+            "Here is a concise response."
+        )
+
+        service = AIConversationService()
+
+        service.generate_response(
+            self.conversation,
+            self.user_message,
+        )
+
+        prompt = mock_generate_response.call_args.args[0]
+
+        self.assertIn(
+            "Communication preferences:",
+            prompt,
+        )
+
+        self.assertIn(
+            "response_style",
+            prompt,
+        )
+
+        self.assertIn(
+            "concise",
+            prompt,
+        )   
+
+    @patch(
+    "conversations.services.ai_conversation_service.AIService.generate_response"
+    )
+    def test_generate_response_uses_response_length(
+        self,
+        mock_generate_response,
+    ):
+        self.profile.communication_style = {
+            "response_length": "short",
+        }
+        self.profile.save()
+
+        mock_generate_response.return_value = (
+            "Here is a short response."
+        )
+
+        service = AIConversationService()
+
+        service.generate_response(
+            self.conversation,
+            self.user_message,
+        )
+
+        prompt = mock_generate_response.call_args.args[0]
+
+        self.assertIn(
+            "Communication preferences:",
+            prompt,
+        )
+
+        self.assertIn(
+            "response_length",
+            prompt,
+        )
+
+        self.assertIn(
+            "short",
+            prompt,
+        )  
+
+    @patch(
+    "conversations.services.ai_conversation_service.AIService.generate_response"
+    )
+    def test_generate_response_uses_channel_specific_preferences(
+        self,
+        mock_generate_response,
+    ):
+        self.profile.communication_style = {
+            "response_style": "concise",
+            "response_length": "short",
+            "channels": {
+                "whatsapp": {
+                    "response_length": "very_short",
+                },
+            },
+        }
+        self.profile.save()
+
+        mock_generate_response.return_value = (
+            "Here is a very short WhatsApp response."
+        )
+
+        service = AIConversationService()
+
+        service.generate_response(
+            self.conversation,
+            self.user_message,
+            channel="whatsapp",
+        )
+
+        prompt = mock_generate_response.call_args.args[0]
+
+        self.assertIn(
+            "Apply the user's whatsapp communication preferences",
+            prompt,
+        )
+
+        self.assertIn(
+            "Whatsapp preferences:",
+            prompt,
+        )
+
+        self.assertIn(
+            "response_length",
+            prompt,
+        )
+
+        self.assertIn(
+            "very_short",
+            prompt,
+        )         
+
+    @patch(
+    "conversations.services.ai_conversation_service.AIService.generate_response"
+    )
+    def test_generate_response_uses_preferred_language(
+        self,
+        mock_generate_response,
+    ):
+        from users.models import Language
+
+        preferred_language = Language.objects.get(
+            name="Hindi",
+        )
+
+        self.user.preferred_language_ref = preferred_language
+        self.user.save()
+
+        mock_generate_response.return_value = (
+            "यह हिंदी में उत्तर है।"
+        )
+
+        service = AIConversationService()
+
+        service.generate_response(
+            self.conversation,
+            self.user_message,
+        )
+
+        prompt = mock_generate_response.call_args.args[0]
+
+        self.assertIn(
+            "Respond in the user's preferred language.",
+            prompt,
+        )
+
+        self.assertIn(
+            "The preferred language is: Hindi.",
+            prompt,
+        )   
 
 class TextToSpeechAPITestCase(APITestCase):
     def setUp(self):
