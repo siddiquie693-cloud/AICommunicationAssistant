@@ -1,12 +1,12 @@
 from unittest.mock import Mock
 
-from django.test import SimpleTestCase
+from django.test import TestCase
 
 from ai.memory.service import MemoryEngine
 from ai.memory.types import MemoryQuery, MemoryResult
 
 
-class MemoryEngineTests(SimpleTestCase):
+class MemoryEngineTests(TestCase):
 
     def test_memory_engine_delegates_retrieval_to_retriever(self):
         retriever = Mock()
@@ -71,3 +71,39 @@ class MemoryEngineTests(SimpleTestCase):
 
         with self.assertRaises(TypeError):
             engine.retrieve(query)
+
+    def test_memory_engine_works_with_django_memory_retriever(self):
+        from django.contrib.auth import get_user_model
+        from django.test import TestCase
+
+        from ai.memory.types import MemoryQuery
+        from memory.models import Memory
+        from memory.retriever import DjangoMemoryRetriever
+
+        user = get_user_model().objects.create_user(
+            username="memoryengineintegration",
+            email="memoryengineintegration@example.com",
+            password="testpass123",
+        )
+
+        Memory.objects.create(
+            user=user,
+            content="User prefers concise answers.",
+            memory_type=Memory.MemoryType.PREFERENCE,
+            importance=5,
+        )
+
+        engine = MemoryEngine(DjangoMemoryRetriever())
+
+        results = engine.retrieve(
+            MemoryQuery(
+                text="response preferences",
+                user_id=user.id,
+            )
+        )
+
+        self.assertEqual(len(results), 1)
+        self.assertEqual(
+            results[0].content,
+            "User prefers concise answers.",
+        )        

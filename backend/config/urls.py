@@ -36,6 +36,7 @@ urlpatterns = [
     path("api/", include("core.urls")),
     path("api/auth/", include("users.urls")),
     path("api/conversations/", include("conversations.urls"),),
+    path("api/memories/", include("memory.urls")),
     path(
     "api/whatsapp/webhook/",
     WhatsAppWebhookAPIView.as_view(),

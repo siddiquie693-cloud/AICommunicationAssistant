@@ -103,6 +103,7 @@ INSTALLED_APPS = [
     "conversations",
     "knowledge",
     "channels",
+    "memory",
 ]
 
 AUTH_USER_MODEL = "users.User"
