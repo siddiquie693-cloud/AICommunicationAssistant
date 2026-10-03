@@ -1,11 +1,16 @@
 from unittest.mock import Mock
-
-from django.test import SimpleTestCase
-
+from django.contrib.auth import get_user_model
+from django.test import TestCase
+from ai.context.builder import MemoryContextBuilder
+from ai.context.service import ContextEngine
+from ai.context.types import Context
+from ai.memory.service import MemoryEngine
+from memory.models import Memory
+from memory.retriever import DjangoMemoryRetriever
 from ai.brain.service import NIRABrain
 from ai.brain.types import BrainRequest
 from ai.android.types import AndroidActionResult
-from ai.context.types import Context
+
 from ai.intent.types import Intent
 from ai.planner.types import ActionPlan, PlannedAction
 from ai.safety.types import (
@@ -15,7 +20,7 @@ from ai.safety.types import (
     SafetyResult,
 )
 
-class NIRABrainTests(SimpleTestCase):
+class NIRABrainTests(TestCase):
 
     def test_nira_brain_delegates_thinking_to_ai_service(self):
         ai_service = Mock()
@@ -132,7 +137,72 @@ class NIRABrainTests(SimpleTestCase):
             safety_request
         )
 
-        android_action_engine.execute.assert_called_once()        
+        android_action_engine.execute.assert_called_once()
+
+    def test_nira_brain_processes_request_with_real_memory_context(self):
+        user = get_user_model().objects.create_user(
+            username="brainmemoryintegration",
+            email="brainmemoryintegration@example.com",
+            password="testpass123",
+        )
+
+        Memory.objects.create(
+            user=user,
+            content="User prefers concise technical responses.",
+            memory_type=Memory.MemoryType.PREFERENCE,
+            importance=5,
+        )
+
+        ai_service = Mock()
+        intent_engine = Mock()
+        action_planner = Mock()
+        safety_engine = Mock()
+        android_action_engine = Mock()
+
+        memory_engine = MemoryEngine(
+            DjangoMemoryRetriever()
+        )
+
+        context_builder = MemoryContextBuilder(
+            memory_engine=memory_engine,
+            user_id=user.id,
+        )
+
+        context_engine = ContextEngine(context_builder)
+
+        request = BrainRequest(
+            text="What kind of responses does the user prefer?",
+        )
+
+        intent = Intent(
+            name="answer_question",
+            parameters={},
+        )
+
+        action_plan = ActionPlan(
+            actions=[],
+        )
+
+        intent_engine.detect.return_value = intent
+        action_planner.plan.return_value = action_plan
+
+        brain = NIRABrain(
+            ai_service,
+            intent_engine=intent_engine,
+            context_engine=context_engine,
+            action_planner=action_planner,
+            safety_engine=safety_engine,
+            android_action_engine=android_action_engine,
+        )
+
+        result = brain.process(request)
+
+        self.assertIsInstance(result.context, Context)
+        self.assertEqual(len(result.context.memory), 1)
+        self.assertEqual(
+            result.context.memory[0]["content"],
+            "User prefers concise technical responses.",
+        )            
 
     def test_nira_brain_does_not_execute_action_when_safety_requires_confirmation(self):
         ai_service = Mock()
