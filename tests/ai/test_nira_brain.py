@@ -4,6 +4,9 @@ from django.test import TestCase
 from ai.context.builder import MemoryContextBuilder
 from ai.context.service import ContextEngine
 from ai.context.types import Context
+from datetime import timedelta
+
+from django.utils import timezone
 from ai.memory.service import MemoryEngine
 from memory.models import Memory
 from memory.retriever import DjangoMemoryRetriever
@@ -202,7 +205,305 @@ class NIRABrainTests(TestCase):
         self.assertEqual(
             result.context.memory[0]["content"],
             "User prefers concise technical responses.",
-        )            
+        )    
+
+    def test_nira_brain_preserves_memory_metadata_in_context(self):
+        user = get_user_model().objects.create_user(
+            username="brainmemorymetadata",
+            email="brainmemorymetadata@example.com",
+            password="testpass123",
+        )
+
+        Memory.objects.create(
+            user=user,
+            content="User is preparing for a Python backend interview.",
+            memory_type=Memory.MemoryType.GOAL,
+            importance=5,
+        )
+
+        memory_engine = MemoryEngine(
+            DjangoMemoryRetriever()
+        )
+
+        builder = MemoryContextBuilder(
+            memory_engine=memory_engine,
+            user_id=user.id,
+        )
+
+        context_engine = ContextEngine(builder)
+
+        ai_service = Mock()
+
+        action_planner = Mock()
+        action_planner.plan.return_value = Mock(actions=[])
+
+        safety_engine = Mock()
+        android_action_engine = Mock()
+
+        intent_engine = Mock()
+        intent_engine.detect.return_value = Mock()
+
+        brain = NIRABrain(
+            ai_service=ai_service,
+            intent_engine=intent_engine,
+            context_engine=context_engine,
+            action_planner=action_planner,
+            safety_engine=safety_engine,
+            android_action_engine=android_action_engine,
+        )
+
+        request = BrainRequest(
+            text="What is the user preparing for?",
+        )
+
+        result = brain.process(request)
+
+        self.assertEqual(len(result.context.memory), 1)
+        self.assertEqual(
+            result.context.memory[0]["memory_type"],
+            Memory.MemoryType.GOAL,
+        )
+        self.assertEqual(
+            result.context.memory[0]["importance"],
+            5,
+        )   
+
+    def test_nira_brain_preserves_memory_metadata_for_multiple_memories(self):
+        user = get_user_model().objects.create_user(
+            username="brainmultiplememory",
+            email="brainmultiplememory@example.com",
+            password="testpass123",
+        )
+
+        Memory.objects.create(
+            user=user,
+            content="User is preparing for a Python backend interview.",
+            memory_type=Memory.MemoryType.GOAL,
+            importance=5,
+        )
+
+        Memory.objects.create(
+            user=user,
+            content="User prefers concise technical responses.",
+            memory_type=Memory.MemoryType.PREFERENCE,
+            importance=4,
+        )
+
+        memory_engine = MemoryEngine(
+            DjangoMemoryRetriever()
+        )
+
+        builder = MemoryContextBuilder(
+            memory_engine=memory_engine,
+            user_id=user.id,
+        )
+
+        context_engine = ContextEngine(builder)
+
+        ai_service = Mock()
+
+        action_planner = Mock()
+        action_planner.plan.return_value = Mock(actions=[])
+
+        safety_engine = Mock()
+        android_action_engine = Mock()
+
+        intent_engine = Mock()
+        intent_engine.detect.return_value = Mock()
+
+        brain = NIRABrain(
+            ai_service=ai_service,
+            intent_engine=intent_engine,
+            context_engine=context_engine,
+            action_planner=action_planner,
+            safety_engine=safety_engine,
+            android_action_engine=android_action_engine,
+        )
+
+        request = BrainRequest(
+            text="What is the user preparing for and what responses do they prefer?",
+        )
+
+        result = brain.process(request)
+
+        self.assertEqual(len(result.context.memory), 2)
+
+        self.assertEqual(
+            result.context.memory[0]["memory_type"],
+            Memory.MemoryType.GOAL,
+        )
+        self.assertEqual(
+            result.context.memory[0]["importance"],
+            5,
+        )
+
+        self.assertEqual(
+            result.context.memory[1]["memory_type"],
+            Memory.MemoryType.PREFERENCE,
+        )
+        self.assertEqual(
+            result.context.memory[1]["importance"],
+            4,
+        )           
+
+    def test_nira_brain_does_not_include_other_users_memory_metadata(self):
+        user = get_user_model().objects.create_user(
+            username="brainownedmemory",
+            email="brainownedmemory@example.com",
+            password="testpass123",
+        )
+
+        other_user = get_user_model().objects.create_user(
+            username="brainothermemory",
+            email="brainothermemory@example.com",
+            password="testpass123",
+        )
+
+        Memory.objects.create(
+            user=user,
+            content="User is preparing for a Python backend interview.",
+            memory_type=Memory.MemoryType.GOAL,
+            importance=5,
+        )
+
+        Memory.objects.create(
+            user=other_user,
+            content="User is preparing for a Python backend interview.",
+            memory_type=Memory.MemoryType.GOAL,
+            importance=1,
+        )
+
+        memory_engine = MemoryEngine(
+            DjangoMemoryRetriever()
+        )
+
+        builder = MemoryContextBuilder(
+            memory_engine=memory_engine,
+            user_id=user.id,
+        )
+
+        context_engine = ContextEngine(builder)
+
+        ai_service = Mock()
+
+        action_planner = Mock()
+        action_planner.plan.return_value = Mock(actions=[])
+
+        safety_engine = Mock()
+        android_action_engine = Mock()
+
+        intent_engine = Mock()
+        intent_engine.detect.return_value = Mock()
+
+        brain = NIRABrain(
+            ai_service=ai_service,
+            intent_engine=intent_engine,
+            context_engine=context_engine,
+            action_planner=action_planner,
+            safety_engine=safety_engine,
+            android_action_engine=android_action_engine,
+        )
+
+        request = BrainRequest(
+            text="What is the user preparing for?",
+        )
+
+        result = brain.process(request)
+
+        self.assertEqual(len(result.context.memory), 1)
+        self.assertEqual(
+            result.context.memory[0]["content"],
+            "User is preparing for a Python backend interview.",
+        )
+        self.assertEqual(
+            result.context.memory[0]["memory_type"],
+            Memory.MemoryType.GOAL,
+        )
+        self.assertEqual(
+            result.context.memory[0]["importance"],
+            5,
+        ) 
+
+    def test_nira_brain_excludes_inactive_and_expired_memory_metadata(self):
+        user = get_user_model().objects.create_user(
+            username="brainactivememory",
+            email="brainactivememory@example.com",
+            password="testpass123",
+        )
+
+        Memory.objects.create(
+            user=user,
+            content="User is preparing for a Python backend interview.",
+            memory_type=Memory.MemoryType.GOAL,
+            importance=5,
+        )
+
+        Memory.objects.create(
+            user=user,
+            content="User previously prepared for a Java interview.",
+            memory_type=Memory.MemoryType.GOAL,
+            importance=5,
+            is_active=False,
+        )
+
+        Memory.objects.create(
+            user=user,
+            content="User previously prepared for a data analyst interview.",
+            memory_type=Memory.MemoryType.GOAL,
+            importance=5,
+            expires_at=timezone.now() - timedelta(minutes=1),
+        )
+
+        memory_engine = MemoryEngine(
+            DjangoMemoryRetriever()
+        )
+
+        builder = MemoryContextBuilder(
+            memory_engine=memory_engine,
+            user_id=user.id,
+        )
+
+        context_engine = ContextEngine(builder)
+
+        ai_service = Mock()
+
+        action_planner = Mock()
+        action_planner.plan.return_value = Mock(actions=[])
+
+        safety_engine = Mock()
+        android_action_engine = Mock()
+
+        intent_engine = Mock()
+        intent_engine.detect.return_value = Mock()
+
+        brain = NIRABrain(
+            ai_service=ai_service,
+            intent_engine=intent_engine,
+            context_engine=context_engine,
+            action_planner=action_planner,
+            safety_engine=safety_engine,
+            android_action_engine=android_action_engine,
+        )
+
+        request = BrainRequest(
+            text="What is the user preparing for?",
+        )
+
+        result = brain.process(request)
+
+        self.assertEqual(len(result.context.memory), 1)
+        self.assertEqual(
+            result.context.memory[0]["content"],
+            "User is preparing for a Python backend interview.",
+        )
+        self.assertEqual(
+            result.context.memory[0]["memory_type"],
+            Memory.MemoryType.GOAL,
+        )
+        self.assertEqual(
+            result.context.memory[0]["importance"],
+            5,
+        )         
 
     def test_nira_brain_does_not_execute_action_when_safety_requires_confirmation(self):
         ai_service = Mock()

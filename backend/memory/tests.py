@@ -9,11 +9,14 @@ from .capture import MemoryCaptureService
 from .models import Memory
 from ai.memory.types import MemoryQuery
 from .services import MemoryService
+from .retriever import DjangoMemoryRetriever
 from .serializers import MemorySerializer
+from ai.memory.types import MemoryQuery
 
 from rest_framework.test import APIRequestFactory, force_authenticate
 
 from .views import (
+    MemoryDeactivateAPIView,
     MemoryDetailAPIView,
     MemoryListCreateAPIView,
 )
@@ -515,7 +518,7 @@ class DjangoMemoryRetrieverTestCase(TestCase):
         )
 
         query = MemoryQuery(
-            text="response preferences",
+            text="concise responses",
             user_id=self.user.id,
         )
 
@@ -524,6 +527,302 @@ class DjangoMemoryRetrieverTestCase(TestCase):
         self.assertEqual(len(results), 1)
         self.assertEqual(results[0].content, memory.content)
         self.assertEqual(results[0].metadata["memory_id"], memory.id)
+
+    def test_retrieve_matches_memory_content_case_insensitively(self):
+        memory = Memory.objects.create(
+            user=self.user,
+            content="User prefers concise responses.",
+            memory_type=Memory.MemoryType.PREFERENCE,
+            importance=4,
+        )
+
+        results = self.retriever.retrieve(
+            MemoryQuery(
+                text="CONCISE RESPONSES",
+                user_id=self.user.id,
+            )
+        )
+
+        self.assertEqual(len(results), 1)
+        self.assertEqual(results[0].content, memory.content)
+
+
+    def test_retrieve_excludes_memories_without_query_match(self):
+        Memory.objects.create(
+            user=self.user,
+            content="User prefers concise responses.",
+            memory_type=Memory.MemoryType.PREFERENCE,
+            importance=5,
+        )
+        Memory.objects.create(
+            user=self.user,
+            content="User works with Python.",
+            memory_type=Memory.MemoryType.FACT,
+            importance=4,
+        )
+
+        results = self.retriever.retrieve(
+            MemoryQuery(
+                text="Python",
+                user_id=self.user.id,
+            )
+        )
+
+        self.assertEqual(len(results), 1)
+        self.assertEqual(results[0].content, "User works with Python.")
+
+
+    def test_retrieve_matches_query_across_memory_content(self):
+        memory = Memory.objects.create(
+            user=self.user,
+            content="User prefers concise responses when discussing technical topics.",
+            memory_type=Memory.MemoryType.PREFERENCE,
+            importance=4,
+        )
+
+        results = self.retriever.retrieve(
+            MemoryQuery(
+                text="technical topics",
+                user_id=self.user.id,
+            )
+        )
+
+        self.assertEqual(len(results), 1)
+        self.assertEqual(results[0].content, memory.content)
+
+    def test_retrieve_returns_empty_for_empty_query(self):
+        Memory.objects.create(
+            user=self.user,
+            content="User prefers concise responses.",
+            memory_type=Memory.MemoryType.PREFERENCE,
+            importance=5,
+        )
+
+        results = self.retriever.retrieve(
+            MemoryQuery(
+                text="",
+                user_id=self.user.id,
+            )
+        )
+
+        self.assertEqual(results, [])
+
+
+    def test_retrieve_returns_empty_for_whitespace_query(self):
+        Memory.objects.create(
+            user=self.user,
+            content="User prefers concise responses.",
+            memory_type=Memory.MemoryType.PREFERENCE,
+            importance=5,
+        )
+
+        results = self.retriever.retrieve(
+            MemoryQuery(
+                text="   ",
+                user_id=self.user.id,
+            )
+        )
+
+        self.assertEqual(results, []) 
+
+    def test_retrieve_orders_matching_memories_by_importance(self):
+        lower_importance = Memory.objects.create(
+            user=self.user,
+            content="User prefers concise responses.",
+            memory_type=Memory.MemoryType.PREFERENCE,
+            importance=2,
+        )
+        higher_importance = Memory.objects.create(
+            user=self.user,
+            content="User prefers concise technical responses.",
+            memory_type=Memory.MemoryType.PREFERENCE,
+            importance=5,
+        )
+        unrelated_memory = Memory.objects.create(
+            user=self.user,
+            content="User enjoys weekend hiking.",
+            memory_type=Memory.MemoryType.FACT,
+            importance=5,
+        )
+
+        results = self.retriever.retrieve(
+            MemoryQuery(
+                text="responses",
+                user_id=self.user.id,
+                limit=2,
+            )
+        )
+
+        self.assertEqual(len(results), 2)
+        self.assertEqual(
+            results[0].content,
+            higher_importance.content,
+        )
+        self.assertEqual(
+            results[1].content,
+            lower_importance.content,
+        )
+        self.assertNotIn(
+            unrelated_memory.content,
+            [result.content for result in results],
+        ) 
+
+    def test_retrieve_excludes_matching_expired_memory(self):
+        active_memory = Memory.objects.create(
+            user=self.user,
+            content="User prefers concise responses.",
+            memory_type=Memory.MemoryType.PREFERENCE,
+            importance=3,
+        )
+        Memory.objects.create(
+            user=self.user,
+            content="User prefers detailed responses.",
+            memory_type=Memory.MemoryType.PREFERENCE,
+            importance=5,
+            expires_at=timezone.now() - timedelta(minutes=1),
+        )
+
+        results = self.retriever.retrieve(
+            MemoryQuery(
+                text="responses",
+                user_id=self.user.id,
+                limit=5,
+            )
+        )
+
+        self.assertEqual(len(results), 1)
+        self.assertEqual(results[0].content, active_memory.content)
+
+
+    def test_retrieve_excludes_matching_inactive_memory(self):
+        active_memory = Memory.objects.create(
+            user=self.user,
+            content="User prefers concise responses.",
+            memory_type=Memory.MemoryType.PREFERENCE,
+            importance=3,
+        )
+        Memory.objects.create(
+            user=self.user,
+            content="User prefers detailed responses.",
+            memory_type=Memory.MemoryType.PREFERENCE,
+            importance=5,
+            is_active=False,
+        )
+
+        results = self.retriever.retrieve(
+            MemoryQuery(
+                text="responses",
+                user_id=self.user.id,
+                limit=5,
+            )
+        )
+
+        self.assertEqual(len(results), 1)
+        self.assertEqual(results[0].content, active_memory.content)  
+
+    def test_retrieve_excludes_matching_memory_from_other_user(self):
+        own_memory = Memory.objects.create(
+            user=self.user,
+            content="User prefers concise responses.",
+            memory_type=Memory.MemoryType.PREFERENCE,
+            importance=3,
+        )
+        Memory.objects.create(
+            user=self.other_user,
+            content="Other user prefers concise responses.",
+            memory_type=Memory.MemoryType.PREFERENCE,
+            importance=5,
+        )
+
+        results = self.retriever.retrieve(
+            MemoryQuery(
+                text="concise responses",
+                user_id=self.user.id,
+                limit=5,
+            )
+        )
+
+        self.assertEqual(len(results), 1)
+        self.assertEqual(results[0].content, own_memory.content)
+
+
+    def test_retrieve_returns_only_matching_memories_for_requested_user(self):
+        own_matching_memory = Memory.objects.create(
+            user=self.user,
+            content="User works with Python backend development.",
+            memory_type=Memory.MemoryType.FACT,
+            importance=4,
+        )
+        Memory.objects.create(
+            user=self.user,
+            content="User enjoys weekend hiking.",
+            memory_type=Memory.MemoryType.FACT,
+            importance=5,
+        )
+        Memory.objects.create(
+            user=self.other_user,
+            content="Other user works with Python backend development.",
+            memory_type=Memory.MemoryType.FACT,
+            importance=5,
+        )
+
+        results = self.retriever.retrieve(
+            MemoryQuery(
+                text="Python backend",
+                user_id=self.user.id,
+                limit=5,
+            )
+        )
+
+        self.assertEqual(len(results), 1)
+        self.assertEqual(
+            results[0].content,
+            own_matching_memory.content,
+        )
+
+    def test_retrieve_matches_memory_when_query_terms_appear_separately(self):
+        memory = Memory.objects.create(
+            user=self.user,
+            content="User prefers concise technical responses.",
+            memory_type=Memory.MemoryType.PREFERENCE,
+            importance=4,
+        )
+
+        results = self.retriever.retrieve(
+            MemoryQuery(
+                text="concise responses",
+                user_id=self.user.id,
+            )
+        )
+
+        self.assertEqual(len(results), 1)
+        self.assertEqual(results[0].content, memory.content) 
+
+    def test_retrieve_prioritizes_memory_matching_more_query_terms(self):
+        partial_match = Memory.objects.create(
+            user=self.user,
+            content="User prefers concise responses.",
+            memory_type=Memory.MemoryType.PREFERENCE,
+            importance=3,
+        )
+        full_match = Memory.objects.create(
+            user=self.user,
+            content="User prefers concise technical responses.",
+            memory_type=Memory.MemoryType.PREFERENCE,
+            importance=3,
+        )
+
+        results = self.retriever.retrieve(
+            MemoryQuery(
+                text="concise technical responses",
+                user_id=self.user.id,
+                limit=2,
+            )
+        )
+
+        self.assertEqual(len(results), 2)
+        self.assertEqual(results[0].content, full_match.content)
+        self.assertEqual(results[1].content, partial_match.content)       
 
     def test_retrieve_does_not_return_other_users_memories(self):
         Memory.objects.create(
@@ -578,6 +877,23 @@ class DjangoMemoryRetrieverTestCase(TestCase):
 
         self.assertEqual(results, [])
 
+    def test_retrieve_excludes_memory_expiring_at_current_time(self):
+        memory = Memory.objects.create(
+            user=self.user,
+            content="Memory expiring now.",
+            memory_type=Memory.MemoryType.EVENT,
+            expires_at=timezone.now(),
+        )
+
+        results = DjangoMemoryRetriever().retrieve(
+            MemoryQuery(
+                text="current event",
+                user_id=self.user.id,
+            )
+        )
+
+        self.assertEqual(results, [])    
+
     def test_retrieve_includes_non_expiring_memories(self):
         memory = Memory.objects.create(
             user=self.user,
@@ -606,7 +922,7 @@ class DjangoMemoryRetrieverTestCase(TestCase):
             )
 
         query = MemoryQuery(
-            text="memories",
+            text="Memory",
             user_id=self.user.id,
             limit=2,
         )
@@ -630,7 +946,7 @@ class DjangoMemoryRetrieverTestCase(TestCase):
         )
 
         query = MemoryQuery(
-            text="important memories",
+            text="memory",
             user_id=self.user.id,
             limit=2,
         )
@@ -645,6 +961,168 @@ class DjangoMemoryRetrieverTestCase(TestCase):
             results[1].content,
             lower_importance.content,
         )
+
+    def test_retrieve_reflects_updated_memory_importance(self):
+        first_memory = Memory.objects.create(
+            user=self.user,
+            content="First memory.",
+            memory_type=Memory.MemoryType.FACT,
+            importance=2,
+        )
+        second_memory = Memory.objects.create(
+            user=self.user,
+            content="Second memory.",
+            memory_type=Memory.MemoryType.FACT,
+            importance=4,
+        )
+
+        MemoryService.update_memory(
+            user=self.user,
+            memory_id=first_memory.id,
+            importance=5,
+        )
+
+        results = DjangoMemoryRetriever().retrieve(
+            MemoryQuery(
+                text="memory",
+                user_id=self.user.id,
+                limit=2,
+            )
+        )
+
+        self.assertEqual(results[0].content, "First memory.")
+        self.assertEqual(results[0].metadata["importance"], 5)
+        self.assertEqual(results[1].content, "Second memory.") 
+
+    def test_retrieve_reflects_updated_memory_expiration(self):
+        memory = Memory.objects.create(
+            user=self.user,
+            content="Temporary memory.",
+            memory_type=Memory.MemoryType.EVENT,
+            expires_at=timezone.now() + timedelta(days=1),
+        )
+
+        retriever = DjangoMemoryRetriever()
+
+        active_results = retriever.retrieve(
+            MemoryQuery(
+                text="temporary memory",
+                user_id=self.user.id,
+            )
+        )
+
+        self.assertEqual(len(active_results), 1)
+
+        MemoryService.update_memory(
+            user=self.user,
+            memory_id=memory.id,
+            expires_at=timezone.now() - timedelta(days=1),
+        )
+
+        expired_results = retriever.retrieve(
+            MemoryQuery(
+                text="temporary memory",
+                user_id=self.user.id,
+            )
+        )
+
+        self.assertEqual(expired_results, [])   
+
+    def test_retrieve_excludes_memory_after_deactivation(self):
+        memory = Memory.objects.create(
+            user=self.user,
+            content="Memory to deactivate.",
+            memory_type=Memory.MemoryType.FACT,
+            importance=5,
+        )
+
+        retriever = DjangoMemoryRetriever()
+
+        active_results = retriever.retrieve(
+            MemoryQuery(
+                text="memory to deactivate",
+                user_id=self.user.id,
+            )
+        )
+
+        self.assertEqual(len(active_results), 1)
+
+        MemoryService.update_memory(
+            user=self.user,
+            memory_id=memory.id,
+            is_active=False,
+        )
+
+        inactive_results = retriever.retrieve(
+            MemoryQuery(
+                text="memory to deactivate",
+                user_id=self.user.id,
+            )
+        )
+
+        self.assertEqual(inactive_results, [])  
+
+    def test_retrieve_keeps_non_expiring_memory_retrievable_after_update(self):
+        memory = Memory.objects.create(
+            user=self.user,
+            content="Permanent preference memory.",
+            memory_type=Memory.MemoryType.PREFERENCE,
+            importance=4,
+        )
+
+        MemoryService.update_memory(
+            user=self.user,
+            memory_id=memory.id,
+            content="Updated permanent preference memory.",
+        )
+
+        results = DjangoMemoryRetriever().retrieve(
+            MemoryQuery(
+                text="permanent preference",
+                user_id=self.user.id,
+            )
+        )
+
+        self.assertEqual(len(results), 1)
+        self.assertEqual(
+            results[0].content,
+            "Updated permanent preference memory.",
+        )
+        self.assertIsNone(
+            Memory.objects.get(id=memory.id).expires_at,
+        )    
+
+    def test_retrieve_orders_memories_with_minimum_importance(self):
+        low_importance_memory = Memory.objects.create(
+            user=self.user,
+            content="Low importance memory.",
+            memory_type=Memory.MemoryType.FACT,
+            importance=1,
+        )
+        high_importance_memory = Memory.objects.create(
+            user=self.user,
+            content="High importance memory.",
+            memory_type=Memory.MemoryType.FACT,
+            importance=5,
+        )
+
+        results = DjangoMemoryRetriever().retrieve(
+            MemoryQuery(
+                text="memory",
+                user_id=self.user.id,
+                limit=2,
+            )
+        )
+
+        self.assertEqual(len(results), 2)
+        self.assertEqual(
+            results[0].content,
+            high_importance_memory.content,
+        )
+        self.assertEqual(
+            results[1].content,
+            low_importance_memory.content,
+        )          
 
     def test_retrieve_includes_memory_metadata(self):
         Memory.objects.create(
@@ -1144,7 +1622,7 @@ class MemoryAPIViewTestCase(TestCase):
         )
         force_authenticate(request, user=self.user)
 
-        response = MemoryDetailAPIView.as_view()(
+        response = MemoryDeactivateAPIView.as_view()(
             request,
             memory_id=memory.id,
         )
@@ -1167,7 +1645,7 @@ class MemoryAPIViewTestCase(TestCase):
         )
         force_authenticate(request, user=self.user)
 
-        response = MemoryDetailAPIView.as_view()(
+        response = MemoryDeactivateAPIView.as_view()(
             request,
             memory_id=memory.id,
         )
@@ -1315,7 +1793,7 @@ class MemoryURLIntegrationTestCase(TestCase):
         self.client.force_authenticate(user=self.user)
 
         response = self.client.post(
-            f"/api/memories/{memory.id}/deactivate/",
+            f"/api/memories/{memory.id}/deactivate/"
         )
 
         self.assertEqual(response.status_code, 200)

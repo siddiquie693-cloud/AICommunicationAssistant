@@ -1,6 +1,5 @@
 from ai.memory.types import MemoryQuery, MemoryResult
 
-
 class MemoryEngine:
     """
     Coordinates personal-memory retrieval.

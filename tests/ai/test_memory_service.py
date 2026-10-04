@@ -1,10 +1,12 @@
 from unittest.mock import Mock
 
+from django.contrib.auth import get_user_model
 from django.test import TestCase
 
 from ai.memory.service import MemoryEngine
 from ai.memory.types import MemoryQuery, MemoryResult
-
+from memory.models import Memory
+from memory.retriever import DjangoMemoryRetriever
 
 class MemoryEngineTests(TestCase):
 
@@ -73,13 +75,6 @@ class MemoryEngineTests(TestCase):
             engine.retrieve(query)
 
     def test_memory_engine_works_with_django_memory_retriever(self):
-        from django.contrib.auth import get_user_model
-        from django.test import TestCase
-
-        from ai.memory.types import MemoryQuery
-        from memory.models import Memory
-        from memory.retriever import DjangoMemoryRetriever
-
         user = get_user_model().objects.create_user(
             username="memoryengineintegration",
             email="memoryengineintegration@example.com",
@@ -97,7 +92,7 @@ class MemoryEngineTests(TestCase):
 
         results = engine.retrieve(
             MemoryQuery(
-                text="response preferences",
+                text="concise answers",
                 user_id=user.id,
             )
         )
@@ -106,4 +101,45 @@ class MemoryEngineTests(TestCase):
         self.assertEqual(
             results[0].content,
             "User prefers concise answers.",
-        )        
+        )
+
+    def test_memory_engine_retrieves_relevant_memories_from_django_retriever(self):
+        user = get_user_model().objects.create_user(
+            username="memoryenginerelavant",
+            email="memoryenginerelavant@example.com",
+            password="testpass123",
+        )
+
+        first_memory = Memory.objects.create(
+            user=user,
+            content="User prefers concise responses.",
+            memory_type=Memory.MemoryType.PREFERENCE,
+            importance=3,
+        )
+        second_memory = Memory.objects.create(
+            user=user,
+            content="User prefers concise technical responses.",
+            memory_type=Memory.MemoryType.PREFERENCE,
+            importance=3,
+        )
+
+        retriever = DjangoMemoryRetriever()
+        engine = MemoryEngine(retriever)
+
+        results = engine.retrieve(
+            MemoryQuery(
+                text="concise technical responses",
+                user_id=user.id,
+                limit=2,
+            )
+        )
+
+        self.assertEqual(len(results), 2)
+        self.assertEqual(
+            results[0].content,
+            second_memory.content,
+        )
+        self.assertEqual(
+            results[1].content,
+            first_memory.content,
+        )
