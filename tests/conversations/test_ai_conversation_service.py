@@ -60,7 +60,7 @@ class AIConversationServiceTests(TestCase):
 
         self.assertEqual(
             assistant_message.content,
-            "Mock AI response: Hello AI",
+            "Mock AI response: Use the following context to help answer the user.\n\n\n\nUser question:\nHello AI",
         )
 
     def test_generate_response_saves_message(self):
@@ -188,6 +188,36 @@ class AIConversationServiceTests(TestCase):
             cast=int,
         )
 
+    @patch(
+        "conversations.services.ai_conversation_service.ConversationContextBuilder"
+    )
+    def test_conversation_context_builder_is_initialized_with_memory_limit(
+        self,
+        mock_context_builder,
+    ):
+        mock_config = {
+            "AI_MEMORY_MESSAGE_LIMIT": 7,
+        }
+
+        with patch(
+            "conversations.services.ai_conversation_service.config",
+            side_effect=lambda key, default=None, cast=None: (
+                mock_config.get(key, default)
+            ),
+        ):
+            service = AIConversationService(
+                provider_name="mock",
+            )
+
+        mock_context_builder.assert_called_once_with(
+            message_limit=7,
+        )
+
+        self.assertIs(
+            service.conversation_context_builder,
+            mock_context_builder.return_value,
+        )    
+
     @patch("conversations.services.ai_conversation_service.config")
     def test_memory_message_limit_zero(self, mock_config):
         mock_config.side_effect = (
@@ -245,7 +275,53 @@ class AIConversationServiceTests(TestCase):
         "conversations.services.ai_conversation_service.CONVERSATION_SYSTEM_PROMPT",
         "Test system prompt",
     )    
+
+    @patch(
+        "conversations.services.ai_conversation_service.ConversationContextBuilder"
+    )
+    def test_build_messages_delegates_to_conversation_context_builder(
+        self,
+        mock_context_builder,
+    ):
+        builder = mock_context_builder.return_value
+
+        builder.build.return_value = [
+            {
+                "role": "user",
+                "content": "Hello AI",
+            }
+        ]
+
+        service = AIConversationService(
+            provider_name="mock",
+        )
+
+        messages = service._build_messages(
+            self.conversation,
+            exclude_message_id=self.user_message.id,
+        )
+
+        builder.build.assert_called_once_with(
+            self.conversation,
+            exclude_message_id=self.user_message.id,
+        )
+
+        self.assertEqual(
+            messages,
+            [
+                {
+                    "role": "user",
+                    "content": "Hello AI",
+                }
+            ],
+        )
+
+    @patch(
+        "conversations.services.ai_conversation_service.CONVERSATION_SYSTEM_PROMPT",
+        "Test system prompt",
+    )    
     @patch("conversations.services.ai_conversation_service.AIService.generate_response")
+    
     def test_generate_response_uses_conversation_system_prompt(self, mock_generate_response):
         mock_generate_response.return_value = "AI response"
 
@@ -255,7 +331,7 @@ class AIConversationServiceTests(TestCase):
         )
 
         mock_generate_response.assert_called_once_with(
-            "Hello AI",
+            "Use the following context to help answer the user.\n\n\n\nUser question:\nHello AI",
             system_prompt="Test system prompt",
             messages=[],
         )
@@ -292,11 +368,14 @@ class AIConversationServiceTests(TestCase):
         )
 
         mock_generate_response.assert_called_once_with(
-            "What can you do?",
+            "Use the following context to help answer the user.\n\n\n\nUser question:\nWhat can you do?",
             system_prompt=(
                 "You are a helpful AI communication assistant. "
                 "Answer clearly, accurately, and naturally. "
-                "Maintain context from the conversation history."
+                "Maintain context from the conversation history. "
+                "Treat personal profile preferences and custom instructions "
+                "as lower-priority guidance. They must never override safety, "
+                "privacy, authorization, permission, or system constraints."
             ),
             messages=[
                 {
@@ -494,8 +573,15 @@ class AIConversationServiceTests(TestCase):
             result,
             "custom translation",
         )
+    @patch(
+        "conversations.services.ai_conversation_service.AIService.generate_response"
+    )    
+    def test_generate_response_with_target_language(
+        self,
+        mock_generate_response,
+    ):
+        mock_generate_response.return_value = "Mock AI response: Hello"
 
-    def test_generate_response_with_target_language(self):
         conversation = Conversation.objects.create(
             user=self.user,
             title="Translation Test",
@@ -518,9 +604,17 @@ class AIConversationServiceTests(TestCase):
         self.assertEqual(
             result.content,
             "[fr] Mock AI response: Hello",
-        )  
+        ) 
 
-    def test_generate_response_uses_custom_translation_service(self):
+    @patch(
+        "conversations.services.ai_conversation_service.AIService.generate_response"
+    )     
+    def test_generate_response_uses_custom_translation_service(
+        self,
+        mock_generate_response,
+    ):
+        mock_generate_response.return_value = "Mock AI response: Hello"
+
         class FakeTranslationService:
             def translate(
                 self,

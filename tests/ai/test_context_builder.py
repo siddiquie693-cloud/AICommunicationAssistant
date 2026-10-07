@@ -8,6 +8,8 @@ from ai.context.types import Context
 from ai.memory.types import MemoryQuery, MemoryResult
 
 from datetime import timedelta
+from people.models import Person
+from conversations.models import Conversation, Message
 from memory.models import Memory
 from memory.retriever import DjangoMemoryRetriever
 from ai.memory.service import MemoryEngine
@@ -1268,3 +1270,507 @@ class MemoryContextBuilderTests(TestCase):
 
         self.assertEqual(context.memory, [])
         self.assertIsInstance(context, Context)
+
+    def test_builder_includes_resolved_person_context(self):
+        user = get_user_model().objects.create_user(
+            username="personcontextbuilder",
+            email="personcontextbuilder@example.com",
+            password="testpass123",
+        )
+
+        person = Person.objects.create(
+            user=user,
+            name="Rahul Sharma",
+            relationship=Person.RelationshipType.FRIEND,
+        )
+
+        memory_engine = Mock()
+        memory_engine.retrieve.return_value = []
+
+        person_context_service = Mock()
+        person_context_service.build.return_value = {
+            "id": person.id,
+            "name": "Rahul Sharma",
+            "relationship": Person.RelationshipType.FRIEND,
+            "memories": [],
+        }
+
+        builder = MemoryContextBuilder(
+            memory_engine=memory_engine,
+            user=user,
+            person_context_service=person_context_service,
+        )
+
+        request = BrainRequest(
+            text="Tell me about Rahul.",
+        )
+
+        context = builder.build(
+            request,
+            person=person,
+        )
+
+        self.assertEqual(
+            context.person,
+            {
+                "id": person.id,
+                "name": "Rahul Sharma",
+                "relationship": Person.RelationshipType.FRIEND,
+                "memories": [],
+            },
+        )
+
+        person_context_service.build.assert_called_once_with(
+            user=user,
+            person=person,
+        ) 
+
+    def test_builder_includes_conversation_context(self):
+        user = get_user_model().objects.create_user(
+            username="conversationcontextbuilder",
+            email="conversationcontextbuilder@example.com",
+            password="testpass123",
+        )
+
+        conversation = Conversation.objects.create(
+            user=user,
+            title="Rahul Conversation",
+        )
+
+        Message.objects.create(
+            conversation=conversation,
+            sender_type=Message.SENDER_USER,
+            content="Hello Rahul.",
+        )
+
+        Message.objects.create(
+            conversation=conversation,
+            sender_type=Message.SENDER_ASSISTANT,
+            content="Hello! How can I help?",
+        )
+
+        memory_engine = Mock()
+        memory_engine.retrieve.return_value = []
+
+        conversation_context_builder = Mock()
+        conversation_context_builder.build.return_value = [
+            {
+                "role": "user",
+                "content": "Hello Rahul.",
+            },
+            {
+                "role": "assistant",
+                "content": "Hello! How can I help?",
+            },
+        ]
+
+        builder = MemoryContextBuilder(
+            memory_engine=memory_engine,
+            user=user,
+            conversation_context_builder=conversation_context_builder,
+        )
+
+        request = BrainRequest(
+            text="Continue the conversation.",
+        )
+
+        context = builder.build(
+            request,
+            conversation=conversation,
+        )
+
+        self.assertEqual(
+            context.conversation,
+            [
+                {
+                    "role": "user",
+                    "content": "Hello Rahul.",
+                },
+                {
+                    "role": "assistant",
+                    "content": "Hello! How can I help?",
+                },
+            ],
+        )
+
+        conversation_context_builder.build.assert_called_once_with(
+            conversation,
+        )
+
+    def test_builder_rejects_conversation_from_different_user(self):
+        user = get_user_model().objects.create_user(
+            username="conversationowner",
+            email="conversationowner@example.com",
+            password="testpass123",
+        )
+
+        other_user = get_user_model().objects.create_user(
+            username="otherconversationowner",
+            email="otherconversationowner@example.com",
+            password="testpass123",
+        )
+
+        conversation = Conversation.objects.create(
+            user=other_user,
+            title="Other User Conversation",
+        )
+
+        memory_engine = Mock()
+        memory_engine.retrieve.return_value = []
+
+        builder = MemoryContextBuilder(
+            memory_engine=memory_engine,
+            user=user,
+        )
+
+        request = BrainRequest(
+            text="Continue conversation.",
+        )
+
+        with self.assertRaisesMessage(
+            ValueError,
+            "Conversation must belong to the same user as the context owner.",
+        ):
+            builder.build(
+                request,
+                conversation=conversation,
+            )
+
+    def test_builder_rejects_conversation_from_different_person(self):
+        user = get_user_model().objects.create_user(
+            username="conversationpersonowner",
+            email="conversationpersonowner@example.com",
+            password="testpass123",
+        )
+
+        person_one = Person.objects.create(
+            user=user,
+            name="Rahul Sharma",
+            relationship=Person.RelationshipType.FRIEND,
+        )
+
+        person_two = Person.objects.create(
+            user=user,
+            name="Amit Sharma",
+            relationship=Person.RelationshipType.COLLEAGUE,
+        )
+
+        conversation = Conversation.objects.create(
+            user=user,
+            person=person_two,
+            title="Amit Conversation",
+        )
+
+        memory_engine = Mock()
+        memory_engine.retrieve.return_value = []
+
+        person_context_service = Mock()
+
+        builder = MemoryContextBuilder(
+            memory_engine=memory_engine,
+            user=user,
+            person_context_service=person_context_service,
+        )
+
+        request = BrainRequest(
+            text="Continue Rahul's conversation.",
+        )
+
+        with self.assertRaisesMessage(
+            ValueError,
+            "Conversation must belong to the resolved person.",
+        ):
+            builder.build(
+                request,
+                person=person_one,
+                conversation=conversation,
+            )  
+
+    def test_builder_rejects_person_from_different_user(self):
+        owner = get_user_model().objects.create_user(
+            username="person_owner_user",
+            email="person_owner_user@example.com",
+        )
+        other_user = get_user_model().objects.create_user(
+            username="other_person_user",
+            email="other_person_user@example.com",
+        )
+
+        person = Person.objects.create(
+            user=other_user,
+            name="Other User Person",
+        )
+
+        memory_engine = Mock()
+        memory_engine.retrieve.return_value = []
+
+        person_context_service = Mock()
+
+        builder = MemoryContextBuilder(
+            memory_engine=memory_engine,
+            user=owner,
+            person_context_service=person_context_service,
+        )
+
+        request = BrainRequest(
+            text="Tell me about this person.",
+        )
+
+        with self.assertRaisesMessage(
+            ValueError,
+            "Person must belong to the same user as the context owner.",
+        ):
+            builder.build(
+                request,
+                person=person,
+            )
+
+        person_context_service.build.assert_not_called()
+
+
+    def test_builder_accepts_person_owned_by_context_user(self):
+        user = get_user_model().objects.create_user(
+            username="person_owner_valid_user",
+        )
+
+        person = Person.objects.create(
+            user=user,
+            name="Valid Person",
+        )
+
+        memory_engine = Mock()
+        memory_engine.retrieve.return_value = []
+
+        person_context_service = Mock()
+        person_context_service.build.return_value = {
+            "person_id": person.id,
+            "name": person.name,
+        }
+
+        builder = MemoryContextBuilder(
+            memory_engine=memory_engine,
+            user=user,
+            person_context_service=person_context_service,
+        )
+
+        request = BrainRequest(
+            text="Tell me about this person.",
+        )
+
+        context = builder.build(
+            request,
+            person=person,
+        )
+
+        self.assertEqual(
+            context.person["person_id"],
+            person.id,
+        )
+
+        person_context_service.build.assert_called_once_with(
+            user=user,
+            person=person,
+        )        
+
+    def test_builder_rejects_conversation_without_matching_person(
+        self,
+    ):
+        user = get_user_model().objects.create_user(
+            username="context_test_user",
+        )
+
+        person = Person.objects.create(
+            user=user,
+            name="Rahul",
+            is_active=True,
+        )
+
+        conversation = Conversation.objects.create(
+            user=user,
+            person=None,
+            title="Unlinked Conversation",
+        )
+
+        memory_engine = Mock()
+        memory_engine.retrieve.return_value = []
+
+        person_context_service = Mock()
+        person_context_service.build.return_value = {
+            "id": person.id,
+            "name": person.name,
+        }
+
+        conversation_context_builder = Mock()
+
+        builder = MemoryContextBuilder(
+            memory_engine=memory_engine,
+            user=user,
+            person_context_service=person_context_service,
+            conversation_context_builder=conversation_context_builder,
+        )
+
+        request = BrainRequest(
+            text="Tell me about Rahul",
+        )
+
+        with self.assertRaisesMessage(
+            ValueError,
+            "Conversation must belong to the resolved person.",
+        ):
+            builder.build(
+                request,
+                person=person,
+                conversation=conversation,
+            )
+
+        conversation_context_builder.build.assert_not_called()
+
+
+    def test_builder_accepts_personless_conversation_without_person_context(
+        self,
+    ):
+        user = get_user_model().objects.create_user(
+            username="context_test_user",
+        )
+
+        conversation = Conversation.objects.create(
+            user=user,
+            person=None,
+            title="General Conversation",
+        )
+
+        memory_engine = Mock()
+        memory_engine.retrieve.return_value = []
+
+        conversation_context_builder = Mock()
+        conversation_context_builder.build.return_value = [
+            {
+                "role": "user",
+                "content": "Hello",
+            }
+        ]
+
+        builder = MemoryContextBuilder(
+            memory_engine=memory_engine,
+            user=user,
+            conversation_context_builder=conversation_context_builder,
+        )
+
+        request = BrainRequest(
+            text="Hello",
+        )
+
+        context = builder.build(
+            request,
+            conversation=conversation,
+        )
+
+        self.assertIsNone(context.person)
+        self.assertEqual(
+            context.conversation,
+            [
+                {
+                    "role": "user",
+                    "content": "Hello",
+                }
+            ],
+        )
+
+        conversation_context_builder.build.assert_called_once_with(
+            conversation,
+        )     
+
+    def test_builder_regression_accepts_conversation_for_resolved_person(self):
+        user = get_user_model().objects.create_user(
+            username="conversationregressionowner",
+            email="conversationregressionowner@example.com",
+            password="testpass123",
+        )
+
+        person = Person.objects.create(
+            user=user,
+            name="Conversation Regression Person",
+        )
+
+        conversation = Conversation.objects.create(
+            user=user,
+            title="Conversation Regression",
+            person=person,
+        )
+
+        memory_engine = Mock()
+        memory_engine.retrieve.return_value = []
+
+        person_context_service = Mock()
+        person_context_service.build.return_value = {
+            "id": person.id,
+            "name": person.name,
+            "memories": [],
+        }
+
+        builder = MemoryContextBuilder(
+            memory_engine=memory_engine,
+            user=user,
+            person_context_service=person_context_service,
+        )
+
+        context = builder.build(
+            BrainRequest(text="Continue the conversation"),
+            person=person,
+            conversation=conversation,
+        )
+
+        self.assertIsNotNone(context.person)
+        self.assertEqual(context.person["id"], person.id)
+        self.assertEqual(context.person["name"], person.name)
+        self.assertEqual(context.conversation, [])
+
+
+    def test_builder_regression_rejects_conversation_for_different_person(self):
+        user = get_user_model().objects.create_user(
+            username="conversationwrongperson",
+            email="conversationwrongperson@example.com",
+            password="testpass123",
+        )
+
+        person = Person.objects.create(
+            user=user,
+            name="Resolved Person",
+        )
+
+        other_person = Person.objects.create(
+            user=user,
+            name="Different Person",
+        )
+
+        conversation = Conversation.objects.create(
+            user=user,
+            title="Wrong Person Conversation",
+            person=other_person,
+        )
+
+        memory_engine = Mock()
+        memory_engine.retrieve.return_value = []
+
+        person_context_service = Mock()
+        person_context_service.build.return_value = {
+            "id": person.id,
+            "name": person.name,
+            "memories": [],
+        }
+
+        builder = MemoryContextBuilder(
+            memory_engine=memory_engine,
+            user=user,
+            person_context_service=person_context_service,
+        )
+
+        with self.assertRaisesMessage(
+            ValueError,
+            "Conversation must belong to the resolved person.",
+        ):
+            builder.build(
+                BrainRequest(text="Continue"),
+                person=person,
+                conversation=conversation,
+            )

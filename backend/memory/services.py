@@ -1,6 +1,6 @@
 from django.db.models import Q
 from django.utils import timezone
-
+from people.models import Person
 from .models import Memory
 
 
@@ -16,9 +16,20 @@ class MemoryService:
         importance=3,
         expires_at=None,
         metadata=None,
+        person=None,
     ):
+            
+        if person is not None:
+            if not isinstance(person, Person):
+                raise ValueError("person must be a Person instance.")
+
+            if person.user_id != user.id:
+                raise ValueError(
+                    "Person must belong to the same user as the memory."
+                )
         return Memory.objects.create(
             user=user,
+            person=person,
             content=content,
             memory_type=memory_type,
             importance=importance,
@@ -54,6 +65,27 @@ class MemoryService:
         )
 
     @staticmethod
+    def get_memories_for_person(*, user, person, limit=None):
+        if not isinstance(person, Person):
+            raise ValueError("person must be a Person instance.")
+
+        if person.user_id != user.id:
+            raise ValueError(
+                "Person must belong to the same user as the memory."
+            )
+
+        memories = Memory.objects.filter(
+            user=user,
+            person=person,
+            is_active=True,
+        ).order_by("-created_at", "-id")
+
+        if limit is not None:
+            memories = memories[:limit]
+
+        return memories
+
+    @staticmethod
     def update_memory(*, user, memory_id, **updates):
         memory = Memory.objects.filter(
             id=memory_id,
@@ -70,7 +102,20 @@ class MemoryService:
             "expires_at",
             "is_active",
             "metadata",
+            "person",
         }
+
+        if "person" in updates:
+            person = updates["person"]
+
+            if person is not None:
+                if not isinstance(person, Person):
+                    raise ValueError("person must be a Person instance.")
+
+                if person.user_id != user.id:
+                    raise ValueError(
+                        "Person must belong to the same user as the memory."
+                    )
 
         for field, value in updates.items():
             if field in allowed_fields:

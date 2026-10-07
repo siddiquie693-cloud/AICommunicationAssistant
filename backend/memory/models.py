@@ -19,6 +19,15 @@ class Memory(models.Model):
         on_delete=models.CASCADE,
         related_name="memories",
     )
+
+    person = models.ForeignKey(
+        "people.Person",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="memories",
+    )
+    
     content = models.TextField()
     memory_type = models.CharField(
         max_length=32,

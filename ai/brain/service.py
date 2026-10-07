@@ -6,7 +6,8 @@ from ai.intent.service import IntentEngine
 from ai.memory.service import MemoryEngine
 from ai.planner.service import ActionPlanner
 from ai.safety.service import SafetyEngine
-
+from people.services import PersonIdentityResolver
+from django.db import models
 
 class NIRABrain:
     """
@@ -25,6 +26,7 @@ class NIRABrain:
         action_planner: ActionPlanner | None = None,
         safety_engine: SafetyEngine | None = None,
         android_action_engine: AndroidActionEngine | None = None,
+        person_identity_resolver=None,
     ):
         self.ai_service = ai_service
         self.intent_engine = intent_engine
@@ -32,6 +34,10 @@ class NIRABrain:
         self.action_planner = action_planner
         self.safety_engine = safety_engine
         self.android_action_engine = android_action_engine
+        self.person_identity_resolver = (
+            person_identity_resolver
+            or PersonIdentityResolver
+        )
 
     def think(
         self,
@@ -55,6 +61,9 @@ class NIRABrain:
     def process(
         self,
         request: BrainRequest,
+        *,
+        person=None,
+        conversation=None,
     ) -> BrainPipelineResult:
         """
         Process a request through the complete NIRA action pipeline.
@@ -89,7 +98,35 @@ class NIRABrain:
             )
 
         intent = self.intent_engine.detect(request)
-        context = self.context_engine.build(request)
+
+        if person is None:
+            recipient = intent.parameters.get("recipient")
+            context_user = getattr(
+                self.context_engine.builder,
+                "user",
+                None,
+            )
+
+            if (
+                recipient 
+                and self.person_identity_resolver is not None
+                and isinstance(context_user, models.Model)
+            ):
+                
+                person = self.person_identity_resolver.resolve(
+                    user=context_user,
+                    name=recipient,
+                )
+
+        if person is None and conversation is None:
+            context = self.context_engine.build(request)
+        else:    
+            context = self.context_engine.build(
+                request,
+                person=person,
+                conversation=conversation,
+            )
+
         action_plan = self.action_planner.plan(intent)
 
         safety_results = []

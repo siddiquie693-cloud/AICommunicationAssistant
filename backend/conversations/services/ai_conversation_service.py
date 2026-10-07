@@ -2,6 +2,7 @@ from ai.providers.factory import get_ai_provider
 from ai.services.ai_service import AIService
 from decouple import config
 from django.conf import settings
+from ai.context.conversation import ConversationContextBuilder
 
 from ai.speech_to_text.factory import get_speech_to_text_service
 from ai.speech_to_text.service import SpeechToTextService
@@ -90,49 +91,25 @@ class AIConversationService:
                 "AI_MEMORY_MESSAGE_LIMIT cannot be negative."
             )
 
+        self.conversation_context_builder = ConversationContextBuilder(
+            message_limit=self.memory_message_limit,
+        )
+
+        if self.memory_message_limit < 0:
+            raise ValueError(
+                "AI_MEMORY_MESSAGE_LIMIT cannot be negative."
+            )
+
     def _build_messages(
         self,
         conversation: Conversation,
         *,
         exclude_message_id: int | None = None,
     ) -> list[dict[str, str]]:
-        """
-        Build structured AI messages from conversation history.
-        """
-
-        conversation_messages = conversation.messages.order_by(
-            "-created_at",
-            "-id",
+        return self.conversation_context_builder.build(
+            conversation,
+            exclude_message_id=exclude_message_id,
         )
-
-        if exclude_message_id is not None:
-            conversation_messages = conversation_messages.exclude(
-                id=exclude_message_id,
-            )
-
-        conversation_messages = list(
-            conversation_messages[: self.memory_message_limit]
-        )
-
-        conversation_messages.reverse()
-
-        messages = []
-
-        for message in conversation_messages:
-            role = (
-                "user"
-                if message.sender_type == Message.SENDER_USER
-                else "assistant"
-            )
-
-            messages.append(
-                {
-                    "role": role,
-                    "content": message.content,
-                }
-            )
-
-        return messages
 
     def _build_profile_context(
         self,

@@ -8,6 +8,14 @@ class Conversation(models.Model):
         related_name="conversations",
     )
 
+    person = models.ForeignKey(
+        "people.Person",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="conversations",
+    )
+
     title = models.CharField(
         max_length=200,
     )

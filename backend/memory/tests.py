@@ -5,6 +5,7 @@ from django.core.exceptions import ValidationError
 from django.test import TestCase
 from django.utils import timezone
 from .capture import MemoryCaptureService
+from people.models import Person
 
 from .models import Memory
 from ai.memory.types import MemoryQuery
@@ -204,6 +205,76 @@ class MemoryModelTestCase(TestCase):
             str(memory),
             "User prefers concise answers.",
         )
+
+    def test_memory_can_be_linked_to_person(self):
+        person = Person.objects.create(
+            user=self.user,
+            name="Rahul",
+        )
+
+        memory = Memory.objects.create(
+            user=self.user,
+            person=person,
+            content="Rahul prefers WhatsApp.",
+            memory_type=Memory.MemoryType.PREFERENCE,
+        )
+
+        self.assertEqual(memory.person, person)
+
+    def test_memory_person_is_optional(self):
+        memory = Memory.objects.create(
+            user=self.user,
+            content="User prefers concise responses.",
+            memory_type=Memory.MemoryType.PREFERENCE,
+        )
+
+        self.assertIsNone(memory.person)
+
+    def test_deleting_person_preserves_memory(self):
+        person = Person.objects.create(
+            user=self.user,
+            name="Rahul",
+        )
+
+        memory = Memory.objects.create(
+            user=self.user,
+            person=person,
+            content="Rahul works with Python.",
+            memory_type=Memory.MemoryType.FACT,
+        )
+
+        memory_id = memory.id
+        person.delete()
+
+        memory.refresh_from_db()
+
+        self.assertTrue(
+            Memory.objects.filter(id=memory_id).exists()
+        )
+        self.assertIsNone(memory.person)
+
+    def test_memory_person_relation_is_user_scoped_by_data_model(self):
+        other_user = User.objects.create_user(
+            username="memorypersonotheruser",
+            email="memorypersonotheruser@example.com",
+            password="testpassword123",
+        )
+
+        person = Person.objects.create(
+            user=other_user,
+            name="Other User Person",
+        )
+
+        memory = Memory.objects.create(
+            user=self.user,
+            person=person,
+            content="Cross-owner memory.",
+            memory_type=Memory.MemoryType.FACT,
+        )
+
+        self.assertEqual(memory.user, self.user)
+        self.assertEqual(memory.person, person)
+        self.assertNotEqual(memory.user_id, memory.person.user_id)    
 
 class MemoryServiceTestCase(TestCase):
     def setUp(self):
@@ -492,6 +563,315 @@ class MemoryServiceTestCase(TestCase):
 
         self.assertFalse(result)
 
+    def test_create_memory_can_link_person(self):
+        person = Person.objects.create(
+            user=self.user,
+            name="Rahul",
+        )
+
+        memory = MemoryService.create_memory(
+            user=self.user,
+            person=person,
+            content="Rahul prefers WhatsApp.",
+            memory_type=Memory.MemoryType.PREFERENCE,
+        )
+
+        self.assertEqual(memory.person, person)
+
+    def test_create_memory_rejects_person_from_another_user(self):
+        person = Person.objects.create(
+            user=self.other_user,
+            name="Other User Person",
+        )
+
+        with self.assertRaises(ValueError):
+            MemoryService.create_memory(
+                user=self.user,
+                person=person,
+                content="Unauthorized person memory.",
+                memory_type=Memory.MemoryType.FACT,
+            )
+
+    def test_create_memory_rejects_invalid_person_value(self):
+        with self.assertRaises(ValueError):
+            MemoryService.create_memory(
+                user=self.user,
+                person="not-a-person",
+                content="Invalid person memory.",
+                memory_type=Memory.MemoryType.FACT,
+            )    
+
+    def test_get_memories_for_person_returns_only_person_memories(self):
+        person = Person.objects.create(
+            user=self.user,
+            name="Rahul",
+        )
+
+        person_memory = MemoryService.create_memory(
+            user=self.user,
+            person=person,
+            content="Rahul prefers WhatsApp.",
+            memory_type=Memory.MemoryType.PREFERENCE,
+        )
+
+        MemoryService.create_memory(
+            user=self.user,
+            content="User prefers concise responses.",
+            memory_type=Memory.MemoryType.PREFERENCE,
+        )
+
+        memories = MemoryService.get_memories_for_person(
+            user=self.user,
+            person=person,
+        )
+
+        self.assertEqual(memories.count(), 1)
+        self.assertEqual(memories[0].id, person_memory.id)
+
+    def test_get_memories_for_person_excludes_inactive_memories(self):
+        person = Person.objects.create(
+            user=self.user,
+            name="Rahul",
+        )
+
+        active_memory = MemoryService.create_memory(
+            user=self.user,
+            person=person,
+            content="Rahul likes Python.",
+            memory_type=Memory.MemoryType.FACT,
+        )
+
+        inactive_memory = MemoryService.create_memory(
+            user=self.user,
+            person=person,
+            content="Rahul used to like Java.",
+            memory_type=Memory.MemoryType.FACT,
+        )
+
+        inactive_memory.is_active = False
+        inactive_memory.save(update_fields=["is_active"])
+
+        memories = MemoryService.get_memories_for_person(
+            user=self.user,
+            person=person,
+        )
+
+        self.assertEqual(memories.count(), 1)
+        self.assertEqual(memories[0].id, active_memory.id)
+
+    def test_get_memories_for_person_respects_limit(self):
+        person = Person.objects.create(
+            user=self.user,
+            name="Rahul",
+        )
+
+        for index in range(3):
+            MemoryService.create_memory(
+                user=self.user,
+                person=person,
+                content=f"Rahul memory {index}",
+                memory_type=Memory.MemoryType.FACT,
+            )
+
+        memories = MemoryService.get_memories_for_person(
+            user=self.user,
+            person=person,
+            limit=2,
+        )
+
+        self.assertEqual(memories.count(), 2)
+
+    def test_get_memories_for_person_rejects_person_from_another_user(self):
+        person = Person.objects.create(
+            user=self.other_user,
+            name="Other User Person",
+        )
+
+        with self.assertRaises(ValueError):
+            MemoryService.get_memories_for_person(
+                user=self.user,
+                person=person,
+            )
+
+    def test_get_memories_for_person_rejects_invalid_person_value(self):
+        with self.assertRaises(ValueError):
+            MemoryService.get_memories_for_person(
+                user=self.user,
+                person="not-a-person",
+            )  
+
+    def test_update_memory_can_assign_person(self):
+        person = Person.objects.create(
+            user=self.user,
+            name="Rahul",
+        )
+
+        memory = MemoryService.create_memory(
+            user=self.user,
+            content="Rahul prefers WhatsApp.",
+            memory_type=Memory.MemoryType.PREFERENCE,
+        )
+
+        updated_memory = MemoryService.update_memory(
+            user=self.user,
+            memory_id=memory.id,
+            person=person,
+        )
+
+        self.assertEqual(updated_memory.person, person)
+
+    def test_update_memory_can_reassign_person(self):
+        first_person = Person.objects.create(
+            user=self.user,
+            name="Rahul",
+        )
+        second_person = Person.objects.create(
+            user=self.user,
+            name="Amit",
+        )
+
+        memory = MemoryService.create_memory(
+            user=self.user,
+            person=first_person,
+            content="Contact prefers WhatsApp.",
+            memory_type=Memory.MemoryType.PREFERENCE,
+        )
+
+        updated_memory = MemoryService.update_memory(
+            user=self.user,
+            memory_id=memory.id,
+            person=second_person,
+        )
+
+        self.assertEqual(updated_memory.person, second_person)
+
+    def test_update_memory_can_remove_person(self):
+        person = Person.objects.create(
+            user=self.user,
+            name="Rahul",
+        )
+
+        memory = MemoryService.create_memory(
+            user=self.user,
+            person=person,
+            content="Rahul prefers WhatsApp.",
+            memory_type=Memory.MemoryType.PREFERENCE,
+        )
+
+        updated_memory = MemoryService.update_memory(
+            user=self.user,
+            memory_id=memory.id,
+            person=None,
+        )
+
+        self.assertIsNone(updated_memory.person)
+
+    def test_update_memory_rejects_person_from_another_user(self):
+        person = Person.objects.create(
+            user=self.other_user,
+            name="Other User Person",
+        )
+
+        memory = MemoryService.create_memory(
+            user=self.user,
+            content="User preference.",
+            memory_type=Memory.MemoryType.PREFERENCE,
+        )
+
+        with self.assertRaises(ValueError):
+            MemoryService.update_memory(
+                user=self.user,
+                memory_id=memory.id,
+                person=person,
+            )
+
+    def test_update_memory_rejects_invalid_person_value(self):
+        memory = MemoryService.create_memory(
+            user=self.user,
+            content="User preference.",
+            memory_type=Memory.MemoryType.PREFERENCE,
+        )
+
+        with self.assertRaises(ValueError):
+            MemoryService.update_memory(
+                user=self.user,
+                memory_id=memory.id,
+                person="not-a-person",
+            )       
+
+    def test_get_memory_preserves_memory_after_person_deletion(self):
+        person = Person.objects.create(
+            user=self.user,
+            name="Rahul",
+        )
+
+        memory = MemoryService.create_memory(
+            user=self.user,
+            person=person,
+            content="Rahul prefers WhatsApp.",
+            memory_type=Memory.MemoryType.PREFERENCE,
+        )
+
+        memory_id = memory.id
+        person.delete()
+
+        preserved_memory = MemoryService.get_memory(
+            user=self.user,
+            memory_id=memory_id,
+        )
+
+        self.assertIsNotNone(preserved_memory)
+        self.assertEqual(preserved_memory.id, memory_id)
+        self.assertIsNone(preserved_memory.person)
+
+    def test_list_memories_preserves_memory_after_person_deletion(self):
+        person = Person.objects.create(
+            user=self.user,
+            name="Rahul",
+        )
+
+        memory = MemoryService.create_memory(
+            user=self.user,
+            person=person,
+            content="Rahul works with Python.",
+            memory_type=Memory.MemoryType.FACT,
+        )
+
+        memory_id = memory.id
+        person.delete()
+
+        memories = MemoryService.list_memories(
+            user=self.user,
+        )
+
+        self.assertEqual(memories.count(), 1)
+        self.assertEqual(memories[0].id, memory_id)
+        self.assertIsNone(memories[0].person)
+
+    def test_list_active_memories_preserves_memory_after_person_deletion(self):
+        person = Person.objects.create(
+            user=self.user,
+            name="Rahul",
+        )
+
+        memory = MemoryService.create_memory(
+            user=self.user,
+            person=person,
+            content="Rahul likes Python.",
+            memory_type=Memory.MemoryType.FACT,
+        )
+
+        memory_id = memory.id
+        person.delete()
+
+        memories = MemoryService.list_active_memories(
+            user=self.user,
+        )
+
+        self.assertEqual(memories.count(), 1)
+        self.assertEqual(memories[0].id, memory_id)
+        self.assertIsNone(memories[0].person)         
+      
 class DjangoMemoryRetrieverTestCase(TestCase):
     def setUp(self):
         self.user = get_user_model().objects.create_user(

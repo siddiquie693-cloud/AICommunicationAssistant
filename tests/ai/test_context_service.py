@@ -7,6 +7,8 @@ from ai.context.service import ContextEngine
 from ai.context.types import Context
 from ai.memory.service import MemoryEngine
 from memory.models import Memory
+from people.models import Person
+
 from memory.retriever import DjangoMemoryRetriever
 
 
@@ -34,7 +36,11 @@ class ContextEngineTests(TestCase):
         result = engine.build(request)
 
         self.assertEqual(result, expected_context)
-        builder.build.assert_called_once_with(request)
+        builder.build.assert_called_once_with(
+            request,
+            person=None,
+            conversation=None,
+        )
 
     def test_context_engine_rejects_non_brain_request(self):
         from unittest.mock import Mock
@@ -97,3 +103,61 @@ class ContextEngineTests(TestCase):
             context.memory[0]["content"],
             "User prefers concise technical responses.",
         )
+
+    def test_context_engine_includes_resolved_person_context(self):
+        
+        user = get_user_model().objects.create_user(
+            username="contextengineperson",
+            email="contextengineperson@example.com",
+            password="testpass123",
+        )
+
+        person = Person.objects.create(
+            user=user,
+            name="Rahul Sharma",
+            relationship=Person.RelationshipType.FRIEND,
+        )
+
+        memory_engine = Mock()
+        memory_engine.retrieve.return_value = []
+
+        person_context_service = Mock()
+        person_context_service.build.return_value = {
+            "id": person.id,
+            "name": "Rahul Sharma",
+            "relationship": Person.RelationshipType.FRIEND,
+            "memories": [],
+        }
+
+        builder = MemoryContextBuilder(
+            memory_engine=memory_engine,
+            user=user,
+            person_context_service=person_context_service,
+        )
+
+        engine = ContextEngine(builder)
+
+        request = BrainRequest(
+            text="Tell me about Rahul.",
+        )
+
+        context = engine.build(
+            request,
+            person=person,
+        )
+
+        self.assertIsInstance(context, Context)
+        self.assertEqual(
+            context.person,
+            {
+                "id": person.id,
+                "name": "Rahul Sharma",
+                "relationship": Person.RelationshipType.FRIEND,
+                "memories": [],
+            },
+        )
+
+        person_context_service.build.assert_called_once_with(
+            user=user,
+            person=person,
+        )    
