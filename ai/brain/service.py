@@ -1,3 +1,6 @@
+
+from django.db import models
+
 from ai.android.service import AndroidActionEngine
 from ai.android.types import AndroidActionRequest
 from ai.brain.types import BrainPipelineResult, BrainRequest
@@ -6,15 +9,17 @@ from ai.intent.service import IntentEngine
 from ai.memory.service import MemoryEngine
 from ai.planner.service import ActionPlanner
 from ai.safety.service import SafetyEngine
+from ai.safety.request_builder import ActionSafetyRequestBuilder
+
 from people.services import PersonIdentityResolver
-from django.db import models
+
 
 class NIRABrain:
     """
     Top-level orchestration boundary for NIRA AI.
 
-    The Brain coordinates understanding, context, planning,
-    safety evaluation, and authorized Android execution.
+    The Brain coordinates understanding, context, validation,
+    planning, safety evaluation, and authorized Android execution.
     """
 
     def __init__(
@@ -27,6 +32,7 @@ class NIRABrain:
         safety_engine: SafetyEngine | None = None,
         android_action_engine: AndroidActionEngine | None = None,
         person_identity_resolver=None,
+        safety_request_builder=None,
     ):
         self.ai_service = ai_service
         self.intent_engine = intent_engine
@@ -37,6 +43,9 @@ class NIRABrain:
         self.person_identity_resolver = (
             person_identity_resolver
             or PersonIdentityResolver
+        )
+        self.safety_request_builder = (
+            safety_request_builder or ActionSafetyRequestBuilder()
         )
 
     def think(
@@ -68,11 +77,10 @@ class NIRABrain:
         """
         Process a request through the complete NIRA action pipeline.
 
-        The pipeline is:
-
         Request
-        -> Intent
         -> Context
+        -> Intent Detection
+        -> Intent Validation
         -> Action Plan
         -> Safety
         -> Android Execution
@@ -86,6 +94,35 @@ class NIRABrain:
         if self.context_engine is None:
             raise ValueError("Context Engine is not configured.")
 
+        if person is None and conversation is None:
+            context = self.context_engine.build(request)
+        else:
+            context = self.context_engine.build(
+                request,
+                person=person,
+                conversation=conversation,
+            )
+
+        validation_result = (
+            self.intent_engine.detect_with_validation(
+                request,
+                context=context,
+            )
+        )
+
+        intent = validation_result.intent
+
+        # Stop invalid intents before planning or execution.
+        if not validation_result.is_valid:
+            return BrainPipelineResult(
+                intent=intent,
+                context=context,
+                action_plan=None,
+                safety_results=[],
+                action_results=[],
+                validation_result=validation_result,
+            )
+
         if self.action_planner is None:
             raise ValueError("Action Planner is not configured.")
 
@@ -97,8 +134,6 @@ class NIRABrain:
                 "Android Action Engine is not configured."
             )
 
-        intent = self.intent_engine.detect(request)
-
         if person is None:
             recipient = intent.parameters.get("recipient")
             context_user = getattr(
@@ -108,24 +143,21 @@ class NIRABrain:
             )
 
             if (
-                recipient 
+                recipient
                 and self.person_identity_resolver is not None
                 and isinstance(context_user, models.Model)
             ):
-                
                 person = self.person_identity_resolver.resolve(
                     user=context_user,
                     name=recipient,
                 )
 
-        if person is None and conversation is None:
-            context = self.context_engine.build(request)
-        else:    
-            context = self.context_engine.build(
-                request,
-                person=person,
-                conversation=conversation,
-            )
+                if person is not None:
+                    context = self.context_engine.build(
+                        request,
+                        person=person,
+                        conversation=conversation,
+                    )
 
         action_plan = self.action_planner.plan(intent)
 
@@ -133,14 +165,7 @@ class NIRABrain:
         action_results = []
 
         for action in action_plan.actions:
-            safety_request = action.parameters.get(
-                "_safety_request"
-            )
-
-            if safety_request is None:
-                raise ValueError(
-                    "Planned action is missing a SafetyRequest."
-                )
+            safety_request = self.safety_request_builder.build(action)
 
             safety_result = self.safety_engine.evaluate(
                 safety_request
@@ -151,9 +176,15 @@ class NIRABrain:
             if safety_result.decision.value != "allow":
                 continue
 
+            execution_parameters = {
+                key: value
+                for key, value in action.parameters.items()
+                if not key.startswith("_")
+            }
+
             android_request = AndroidActionRequest(
                 action_name=action.name,
-                parameters=action.parameters,
+                parameters=execution_parameters,
             )
 
             action_result = self.android_action_engine.execute(
@@ -168,4 +199,5 @@ class NIRABrain:
             action_plan=action_plan,
             safety_results=safety_results,
             action_results=action_results,
+            validation_result=validation_result,
         )

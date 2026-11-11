@@ -1,28 +1,53 @@
 from ai.brain.types import BrainRequest
 from ai.intent.types import Intent
+from ai.intent.detector import IntentDetector
+from ai.intent.validator import (
+    IntentValidator,
+    IntentValidationResult,
+)
 
 
 class IntentEngine:
     """
-    Converts a structured BrainRequest into an Intent.
-
-    The actual intent-detection implementation is injected so that
-    the Intent Engine remains independent from a specific AI provider.
+    Detects and validates user intents before returning them.
     """
 
-    def __init__(self, detector):
+    def __init__(
+        self,
+        detector: IntentDetector,
+        validator=None,
+    ):
         self.detector = detector
+        self.validator = validator or IntentValidator()
 
-    def detect(self, request: BrainRequest) -> Intent:
-        """
-        Detect the user's intent from a BrainRequest.
-        """
+    def detect_with_validation(
+        self,
+        request: BrainRequest,
+        *,
+        context=None,
+    ) -> IntentValidationResult:
         if not isinstance(request, BrainRequest):
             raise TypeError("request must be a BrainRequest.")
 
-        intent = self.detector.detect(request)
+        intent = self.detector.detect(
+            request,
+            context=context,
+        )
 
         if not isinstance(intent, Intent):
             raise TypeError("detector must return an Intent.")
 
-        return intent
+        return self.validator.validate(intent)
+
+    def detect(
+        self,
+        request: BrainRequest,
+        *,
+        context=None,
+    ) -> Intent:
+        result = self.detect_with_validation(
+            request,
+            context=context,
+        )
+
+        return result.intent

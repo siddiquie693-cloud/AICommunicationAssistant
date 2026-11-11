@@ -28,7 +28,10 @@ class IntentEngineTests(SimpleTestCase):
         result = engine.detect(request)
 
         self.assertEqual(result, expected_intent)
-        detector.detect.assert_called_once_with(request)
+        detector.detect.assert_called_once_with(
+            request,
+            context=None,
+        )
 
     def test_intent_engine_rejects_non_brain_request(self):
         detector = Mock()

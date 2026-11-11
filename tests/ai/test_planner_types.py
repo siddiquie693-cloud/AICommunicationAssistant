@@ -7,14 +7,14 @@ class PlannedActionTests(SimpleTestCase):
 
     def test_planned_action_stores_name_and_parameters(self):
         action = PlannedAction(
-            name="call_contact",
-            parameters={"contact": "John"},
+            name="call_person",
+            parameters={"recipient": "John"},
         )
 
-        self.assertEqual(action.name, "call_contact")
+        self.assertEqual(action.name, "call_person")
         self.assertEqual(
             action.parameters,
-            {"contact": "John"},
+            {"recipient": "John"},
         )
 
     def test_planned_action_defaults_to_empty_parameters(self):
@@ -30,7 +30,7 @@ class ActionPlanTests(SimpleTestCase):
     def test_action_plan_stores_ordered_actions(self):
         first_action = PlannedAction(
             name="call_contact",
-            parameters={"contact": "John"},
+            parameters={"recipient": "John", "request": "Hello John"},
         )
         second_action = PlannedAction(
             name="send_message",

@@ -1,10 +1,11 @@
-from unittest.mock import Mock
+from unittest.mock import Mock, call
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 from ai.context.builder import MemoryContextBuilder
 from ai.context.service import ContextEngine
 from ai.context.types import Context
 from datetime import timedelta
+from ai.intent.validator import IntentValidationResult
 
 from django.utils import timezone
 from ai.memory.service import MemoryEngine
@@ -14,9 +15,11 @@ from people.models import Person
 from memory.retriever import DjangoMemoryRetriever
 from ai.brain.service import NIRABrain
 from ai.brain.types import BrainRequest
-from ai.android.types import AndroidActionResult
+from ai.android.types import AndroidActionResult, AndroidActionRequest
 
 from ai.intent.types import Intent
+from ai.intent.detector import BasicIntentDetector
+from ai.intent.service import IntentEngine
 from ai.planner.types import ActionPlan, PlannedAction
 from ai.safety.types import (
     SafetyDecision,
@@ -87,7 +90,6 @@ class NIRABrainTests(TestCase):
             name="open_app",
             parameters={
                 "app": "calculator",
-                "_safety_request": safety_request,
             },
         )
 
@@ -106,7 +108,11 @@ class NIRABrainTests(TestCase):
             message="Calculator opened.",
         )
 
-        intent_engine.detect.return_value = intent
+        intent_engine.detect_with_validation.return_value = Mock(
+            is_valid=True,
+            intent=intent,
+            errors=(),
+        )
         context_engine.build.return_value = context
         action_planner.plan.return_value = action_plan
         safety_engine.evaluate.return_value = safety_result
@@ -135,7 +141,7 @@ class NIRABrainTests(TestCase):
             [action_result],
         )
 
-        intent_engine.detect.assert_called_once_with(request)
+        intent_engine.detect_with_validation.assert_called_once_with(request, context=context)
         context_engine.build.assert_called_once_with(request)
         action_planner.plan.assert_called_once_with(intent)
         safety_engine.evaluate.assert_called_once_with(
@@ -144,7 +150,103 @@ class NIRABrainTests(TestCase):
 
         android_action_engine.execute.assert_called_once()
 
-    def test_nira_brain_resolves_person_from_intent_recipient(self):
+    def test_nira_brain_excludes_internal_metadata_from_android_execution(self):
+        ai_service = Mock()
+        intent_engine = Mock()
+        context_engine = Mock()
+        action_planner = Mock()
+        safety_engine = Mock()
+        android_action_engine = Mock()
+
+        request = BrainRequest(text="Open calculator")
+
+        intent = Intent(
+            name="open_app",
+            parameters={"app": "calculator"},
+        )
+
+        context = Context(profile={})
+
+        action = PlannedAction(
+            name="open_app",
+            parameters={
+                "app": "calculator",
+                "_internal_metadata": "must_not_reach_android",
+            },
+        )
+
+        action_plan = ActionPlan(actions=[action])
+
+        safety_result = SafetyResult(
+            decision=SafetyDecision.ALLOW,
+            reason="Action is safe.",
+        )
+
+        action_result = AndroidActionResult(
+            success=True,
+            action_name="open_app",
+            message="Calculator opened.",
+        )
+
+        intent_engine.detect_with_validation.return_value = Mock(
+            is_valid=True,
+            intent=intent,
+            errors=(),
+        )
+        context_engine.build.return_value = context
+        action_planner.plan.return_value = action_plan
+        safety_engine.evaluate.return_value = safety_result
+        android_action_engine.execute.return_value = action_result
+
+        brain = NIRABrain(
+            ai_service,
+            intent_engine=intent_engine,
+            context_engine=context_engine,
+            action_planner=action_planner,
+            safety_engine=safety_engine,
+            android_action_engine=android_action_engine,
+        )
+
+        brain.process(request)
+
+        android_action_engine.execute.assert_called_once_with(
+            AndroidActionRequest(
+                action_name="open_app",
+                parameters={"app": "calculator"},
+            )
+        )
+
+    def test_nira_brain_integrates_basic_intent_detector(self):
+        intent_detector = BasicIntentDetector()
+        intent_engine = IntentEngine(intent_detector)
+
+        request = BrainRequest(
+            text="hello",
+        )
+
+        intent = intent_engine.detect(request)
+
+        self.assertIsInstance(intent, Intent)
+        self.assertEqual(intent.name, "unknown")
+        self.assertEqual(intent.parameters, {})
+
+    def test_nira_brain_uses_intent_engine_with_basic_intent_detector(self):
+        intent_detector = BasicIntentDetector()
+        intent_engine = IntentEngine(intent_detector)
+
+        request = BrainRequest(
+            text="hello",
+        )
+
+        intent = intent_engine.detect(request)
+
+        self.assertEqual(
+            intent_engine.detector,
+            intent_detector,
+        )
+        self.assertEqual(intent.name, "unknown")
+
+    def test_nira_brain_resolves_person_from_intent_recipient_and_preserves_validation(self):
         user = get_user_model().objects.create_user(
             username="brainidentityuser",
             email="brainidentityuser@example.com",
@@ -164,14 +266,20 @@ class NIRABrainTests(TestCase):
         android_action_engine = Mock()
         person_identity_resolver = Mock()
 
-        request = BrainRequest(
-            text="Send a message to John",
-        )
+        request = BrainRequest(text="Send a message to John")
 
         intent = Intent(
             name="send_message",
             parameters={"recipient": "John"},
         )
+
+        validation_result = IntentValidationResult(
+            is_valid=True,
+            intent=intent,
+            errors=(),
+        )
+
+        intent_engine.detect_with_validation.return_value = validation_result
 
         context = Context(
             person={
@@ -180,14 +288,10 @@ class NIRABrainTests(TestCase):
             },
         )
 
-        action_plan = ActionPlan(
-            actions=[],
-        )
-
-        intent_engine.detect.return_value = intent
-        person_identity_resolver.resolve.return_value = person
+        context_engine.builder = Mock(user=user)
         context_engine.build.return_value = context
-        action_planner.plan.return_value = action_plan
+        person_identity_resolver.resolve.return_value = person
+        action_planner.plan.return_value = ActionPlan(actions=[])
 
         brain = NIRABrain(
             ai_service,
@@ -199,23 +303,22 @@ class NIRABrainTests(TestCase):
             person_identity_resolver=person_identity_resolver,
         )
 
-        result = brain.process(
-            request,
-            user=user,
-        )
+        result = brain.process(request)
 
-        self.assertEqual(result.context, context)
+        self.assertIs(result.intent, intent)
+        self.assertIs(result.validation_result, validation_result)
 
         person_identity_resolver.resolve.assert_called_once_with(
             user=user,
             name="John",
         )
 
-        context_engine.build.assert_called_once_with(
-            request,
-            person=person,
-            conversation=None,
-        )
+        context_engine.build.assert_has_calls([
+            call(request),
+            call(request, person=person, conversation=None),
+        ])
+
+        action_planner.plan.assert_called_once_with(intent)
 
     def test_nira_brain_passes_resolved_person_into_context(self):
         user = get_user_model().objects.create_user(
@@ -260,7 +363,11 @@ class NIRABrainTests(TestCase):
             actions=[],
         )
 
-        intent_engine.detect.return_value = intent
+        intent_engine.detect_with_validation.return_value = IntentValidationResult(
+            is_valid=True,
+            intent=intent,
+            errors=(),
+        )
         person_identity_resolver.resolve.return_value = person
         context_engine.build.return_value = context
         action_planner.plan.return_value = action_plan
@@ -287,12 +394,15 @@ class NIRABrainTests(TestCase):
             name="Sarah",
         )
 
-        context_engine.build.assert_called_once_with(
+        self.assertEqual(context_engine.build.call_count, 2)
+
+        context_engine.build.assert_any_call(request)
+
+        context_engine.build.assert_any_call(
             request,
             person=person,
             conversation=None,
         )
-
 
     def test_nira_brain_preserves_resolved_person_for_context_layer(self):
         user = get_user_model().objects.create_user(
@@ -335,7 +445,11 @@ class NIRABrainTests(TestCase):
             actions=[],
         )
 
-        intent_engine.detect.return_value = intent
+        intent_engine.detect_with_validation.return_value = IntentValidationResult(
+            is_valid=True,
+            intent=intent,
+            errors=(),
+        )
         person_identity_resolver.resolve.return_value = person
         context_engine.build.return_value = context
         action_planner.plan.return_value = action_plan
@@ -365,7 +479,7 @@ class NIRABrainTests(TestCase):
         person_identity_resolver.resolve.assert_called_once_with(
             user=user,
             name="David",
-        )    
+        )
 
     def test_nira_brain_integrates_resolved_person_with_memory_context(self):
         user = get_user_model().objects.create_user(
@@ -447,12 +561,13 @@ class NIRABrainTests(TestCase):
             person.id,
         )
 
-        context_engine.build.assert_called_once_with(
+        self.assertEqual(context_engine.build.call_count, 2)
+
+        context_engine.build.assert_any_call(
             request,
             person=person,
             conversation=None,
         )
-
 
     def test_nira_brain_preserves_person_and_memory_context_together(self):
         user = get_user_model().objects.create_user(
@@ -535,7 +650,7 @@ class NIRABrainTests(TestCase):
         self.assertIs(
             context_engine.build.call_args.kwargs["person"],
             person,
-        )    
+        )
 
     def test_nira_brain_integrates_resolved_person_with_conversation(self):
         user = get_user_model().objects.create_user(
@@ -592,7 +707,11 @@ class NIRABrainTests(TestCase):
             actions=[],
         )
 
-        intent_engine.detect.return_value = intent
+        intent_engine.detect_with_validation.return_value = IntentValidationResult(
+            is_valid=True,
+            intent=intent,
+            errors=(),
+        )
         person_identity_resolver.resolve.return_value = person
         context_engine.build.return_value = context
         action_planner.plan.return_value = action_plan
@@ -624,7 +743,15 @@ class NIRABrainTests(TestCase):
             name="Robert",
         )
 
-        context_engine.build.assert_called_once_with(
+        self.assertEqual(context_engine.build.call_count, 2)
+
+        context_engine.build.assert_any_call(
+            request,
+            person=person,
+            conversation=conversation,
+        )
+
+        context_engine.build.assert_any_call(
             request,
             person=person,
             conversation=conversation,
@@ -720,7 +847,7 @@ class NIRABrainTests(TestCase):
         self.assertEqual(
             result.context.person["id"],
             person.id,
-        ) 
+        )
 
         self.assertEqual(
             result.context.conversation[0]["id"],
@@ -769,7 +896,11 @@ class NIRABrainTests(TestCase):
             actions=[],
         )
 
-        intent_engine.detect.return_value = intent
+        intent_engine.detect_with_validation.return_value = IntentValidationResult(
+            is_valid=True,
+            intent=intent,
+            errors=(),
+        )
         person_identity_resolver.resolve.return_value = person
         context_engine.build.return_value = context
         action_planner.plan.return_value = action_plan
@@ -792,14 +923,18 @@ class NIRABrainTests(TestCase):
         self.assertIs(result.context, context)
         self.assertEqual(result.context.person["id"], person.id)
 
-        intent_engine.detect.assert_called_once_with(request)
+        intent_engine.detect_with_validation.assert_called_once_with(request, context=context)
 
         person_identity_resolver.resolve.assert_called_once_with(
             user=user,
             name="Alice",
         )
 
-        context_engine.build.assert_called_once_with(
+        self.assertEqual(context_engine.build.call_count, 2)
+
+        context_engine.build.assert_any_call(request)
+
+        context_engine.build.assert_any_call(
             request,
             person=person,
             conversation=None,
@@ -850,7 +985,11 @@ class NIRABrainTests(TestCase):
             actions=[],
         )
 
-        intent_engine.detect.return_value = intent
+        intent_engine.detect_with_validation.return_value = IntentValidationResult(
+            is_valid=True,
+            intent=intent,
+            errors=(),
+        )
         person_identity_resolver.resolve.return_value = person
         context_engine.build.return_value = context
         action_planner.plan.return_value = action_plan
@@ -885,7 +1024,7 @@ class NIRABrainTests(TestCase):
             person,
         )
 
-        action_planner.plan.assert_called_once_with(intent)  
+        action_planner.plan.assert_called_once_with(intent)
 
     def test_nira_brain_end_to_end_person_intelligence_flow(self):
         user = get_user_model().objects.create_user(
@@ -961,7 +1100,11 @@ class NIRABrainTests(TestCase):
             actions=[],
         )
 
-        intent_engine.detect.return_value = intent
+        intent_engine.detect_with_validation.return_value = IntentValidationResult(
+            is_valid=True,
+            intent=intent,
+            errors=(),
+        )
         person_identity_resolver.resolve.return_value = person
         context_engine.build.return_value = context
         action_planner.plan.return_value = action_plan
@@ -1011,7 +1154,15 @@ class NIRABrainTests(TestCase):
             name="Emma",
         )
 
-        context_engine.build.assert_called_once_with(
+        self.assertEqual(context_engine.build.call_count, 2)
+
+        context_engine.build.assert_any_call(
+            request,
+            person=person,
+            conversation=conversation,
+        )
+
+        context_engine.build.assert_any_call(
             request,
             person=person,
             conversation=conversation,
@@ -1063,7 +1214,11 @@ class NIRABrainTests(TestCase):
             actions=[],
         )
 
-        intent_engine.detect.return_value = intent
+        intent_engine.detect_with_validation.return_value = IntentValidationResult(
+            is_valid=True,
+            intent=intent,
+            errors=(),
+        )
         person_identity_resolver.resolve.return_value = person
         context_engine.build.return_value = context
         action_planner.plan.return_value = action_plan
@@ -1092,13 +1247,15 @@ class NIRABrainTests(TestCase):
             name="Olivia",
         )
 
-        context_engine.build.assert_called_once_with(
+        self.assertEqual(context_engine.build.call_count, 2)
+        context_engine.build.assert_any_call(request)
+        context_engine.build.assert_any_call(
             request,
             person=person,
             conversation=None,
         )
 
-        action_planner.plan.assert_called_once_with(intent)         
+        action_planner.plan.assert_called_once_with(intent)
 
     def test_nira_brain_does_not_resolve_person_when_recipient_is_missing(self):
         ai_service = Mock()
@@ -1147,7 +1304,7 @@ class NIRABrainTests(TestCase):
         context_engine.build.assert_called_once_with(request)
 
 
-    def test_nira_brain_preserves_explicit_person_without_identity_resolution(self):
+    def test_nira_brain_preserves_explicit_person_without_identity_resolution_and_user_context(self):
         user = get_user_model().objects.create_user(
             username="brainexplicitperson",
             email="brainexplicitperson@example.com",
@@ -1203,7 +1360,6 @@ class NIRABrainTests(TestCase):
 
         result = brain.process(
             request,
-            user=user,
             person=person,
         )
 
@@ -1215,7 +1371,7 @@ class NIRABrainTests(TestCase):
             request,
             person=person,
             conversation=None,
-        )    
+        )
 
     def test_nira_brain_processes_request_with_real_memory_context(self):
         user = get_user_model().objects.create_user(
@@ -1280,7 +1436,7 @@ class NIRABrainTests(TestCase):
         self.assertEqual(
             result.context.memory[0]["content"],
             "User prefers concise technical responses.",
-        )    
+        )
 
     def test_nira_brain_preserves_memory_metadata_in_context(self):
         user = get_user_model().objects.create_user(
@@ -1341,7 +1497,7 @@ class NIRABrainTests(TestCase):
         self.assertEqual(
             result.context.memory[0]["importance"],
             5,
-        )   
+        )
 
     def test_nira_brain_preserves_memory_metadata_for_multiple_memories(self):
         user = get_user_model().objects.create_user(
@@ -1419,7 +1575,7 @@ class NIRABrainTests(TestCase):
         self.assertEqual(
             result.context.memory[1]["importance"],
             4,
-        )           
+        )
 
     def test_nira_brain_does_not_include_other_users_memory_metadata(self):
         user = get_user_model().objects.create_user(
@@ -1497,7 +1653,7 @@ class NIRABrainTests(TestCase):
         self.assertEqual(
             result.context.memory[0]["importance"],
             5,
-        ) 
+        )
 
     def test_nira_brain_excludes_inactive_and_expired_memory_metadata(self):
         user = get_user_model().objects.create_user(
@@ -1578,10 +1734,10 @@ class NIRABrainTests(TestCase):
         self.assertEqual(
             result.context.memory[0]["importance"],
             5,
-        ) 
+        )
 
     def test_nira_brain_processes_resolved_person_context(self):
-        
+
         user = get_user_model().objects.create_user(
             username="brainpersoncontext",
             email="brainpersoncontext@example.com",
@@ -1657,7 +1813,7 @@ class NIRABrainTests(TestCase):
         person_context_service.build.assert_called_once_with(
             user=user,
             person=person,
-        ) 
+        )
 
     def test_nira_brain_processes_resolved_person_and_conversation_context(self):
         user = get_user_model().objects.create_user(
@@ -1736,7 +1892,7 @@ class NIRABrainTests(TestCase):
             request,
             person=person,
             conversation=conversation,
-        ) 
+        )
 
     def test_nira_brain_rejects_conversation_from_different_resolved_person(self):
         user = get_user_model().objects.create_user(
@@ -1820,7 +1976,7 @@ class NIRABrainTests(TestCase):
                 conversation=conversation,
             )
 
-        conversation_context_builder.build.assert_not_called()     
+        conversation_context_builder.build.assert_not_called()
 
     def test_nira_brain_accepts_matching_person_and_conversation(self):
         user = get_user_model().objects.create_user(
@@ -1934,7 +2090,7 @@ class NIRABrainTests(TestCase):
 
         conversation_context_builder.build.assert_called_once_with(
             conversation,
-        ) 
+        )
 
     def test_nira_brain_passes_resolved_person_to_context_engine(self):
         user = get_user_model().objects.create_user(
@@ -1992,7 +2148,7 @@ class NIRABrainTests(TestCase):
             request,
             person=person,
             conversation=None,
-        )   
+        )
 
     def test_nira_brain_preserves_resolved_person_in_context_result(self):
         user = get_user_model().objects.create_user(
@@ -2060,7 +2216,7 @@ class NIRABrainTests(TestCase):
         self.assertEqual(
             result.context.person["name"],
             person.name,
-        )                  
+        )
 
     def test_nira_brain_retrieves_person_context_for_resolved_person(self):
         user = get_user_model().objects.create_user(
@@ -2130,7 +2286,7 @@ class NIRABrainTests(TestCase):
         person_context_service.build.assert_called_once_with(
             user=user,
             person=person,
-        ) 
+        )
 
     def test_nira_brain_combines_person_conversation_and_memory_context(self):
         user = get_user_model().objects.create_user(
@@ -2257,7 +2413,7 @@ class NIRABrainTests(TestCase):
 
         conversation_context_builder.build.assert_called_once_with(
             conversation,
-        )    
+        )
 
     def test_nira_brain_rejects_person_context_without_person_service(self):
         user = get_user_model().objects.create_user(
@@ -2427,7 +2583,7 @@ class NIRABrainTests(TestCase):
         person_context_service.build.assert_any_call(
             user=user,
             person=person_two,
-        )          
+        )
 
     def test_nira_brain_does_not_execute_action_when_safety_requires_confirmation(self):
         ai_service = Mock()
@@ -2498,7 +2654,7 @@ class NIRABrainTests(TestCase):
         )
         self.assertEqual(result.action_results, [])
 
-        android_action_engine.execute.assert_not_called()    
+        android_action_engine.execute.assert_not_called()
 
     def test_nira_brain_does_not_allow_profile_instruction_to_bypass_safety(
         self,
@@ -2535,7 +2691,7 @@ class NIRABrainTests(TestCase):
                 "recipient": "John",
                 "content": "Hello",
             },
-            risk_level=SafetyLevel.MEDIUM,
+            risk_level=SafetyLevel.HIGH,
         )
 
         action = PlannedAction(
@@ -2543,7 +2699,6 @@ class NIRABrainTests(TestCase):
             parameters={
                 "recipient": "John",
                 "content": "Hello",
-                "_safety_request": safety_request,
             },
         )
 
@@ -2596,7 +2751,7 @@ class NIRABrainTests(TestCase):
             safety_request
         )
 
-        android_action_engine.execute.assert_not_called()    
+        android_action_engine.execute.assert_not_called()
 
     def test_nira_brain_does_not_allow_profile_data_to_authorize_denied_action(
         self,
@@ -2614,8 +2769,11 @@ class NIRABrainTests(TestCase):
         )
 
         intent = Intent(
-            name="delete_account",
-            parameters={},
+            name="send_message",
+            parameters={
+                "recipient": "John",
+                "request": "Hello",
+            },
         )
 
         context = Context(
@@ -2627,15 +2785,19 @@ class NIRABrainTests(TestCase):
         )
 
         safety_request = SafetyRequest(
-            action_name="delete_account",
-            parameters={},
+            action_name="send_message",
+            parameters={
+                "recipient": "John",
+                "request": "Hello",
+            },
             risk_level=SafetyLevel.HIGH,
         )
 
         action = PlannedAction(
-            name="delete_account",
+            name="send_message",
             parameters={
-                "_safety_request": safety_request,
+                "recipient": "John",
+                "request": "Hello",
             },
         )
 
@@ -2688,7 +2850,7 @@ class NIRABrainTests(TestCase):
             safety_request
         )
 
-        android_action_engine.execute.assert_not_called()  
+        android_action_engine.execute.assert_not_called()
 
     def test_nira_brain_resolves_person_from_intent_recipient(self):
         user = get_user_model().objects.create_user(
@@ -2732,7 +2894,11 @@ class NIRABrainTests(TestCase):
             actions=[],
         )
 
-        intent_engine.detect.return_value = intent
+        intent_engine.detect_with_validation.return_value = IntentValidationResult(
+            is_valid=True,
+            intent=intent,
+            errors=(),
+        )
         person_identity_resolver.resolve.return_value = person
         context_engine.build.return_value = context
         action_planner.plan.return_value = action_plan
@@ -2760,12 +2926,15 @@ class NIRABrainTests(TestCase):
             name="John",
         )
 
-        context_engine.build.assert_called_once_with(
+        self.assertEqual(context_engine.build.call_count, 2)
+
+        context_engine.build.assert_any_call(request)
+
+        context_engine.build.assert_any_call(
             request,
             person=person,
             conversation=None,
         )
-
 
     def test_nira_brain_does_not_resolve_person_when_recipient_is_missing(self):
         ai_service = Mock()
@@ -2881,4 +3050,4 @@ class NIRABrainTests(TestCase):
             request,
             person=person,
             conversation=None,
-        )      
+        )

@@ -1,7 +1,9 @@
 from unittest.mock import Mock, patch
-
+from ai.intent.validator import IntentValidationResult
 from django.test import SimpleTestCase
 
+from ai.safety.types import SafetyLevel, SafetyRequest
+from ai.planner.types import ActionPlan, PlannedAction
 from ai.brain.types import BrainPipelineResult, BrainRequest
 from ai.core.service import NIRACore
 from ai.brain.service import NIRABrain
@@ -282,18 +284,22 @@ class NIRACoreTests(SimpleTestCase):
             text="Open calculator",
         )
 
-        safety_request = Mock()
+        action = PlannedAction(
+            name="open_app",
+            parameters={
+                "app": "calculator",
+            },
+        )
 
-        action = Mock()
-        action.name = "open_app"
-        action.parameters = {
-            "app": "calculator",
-            "_safety_request": safety_request,
-        }
+        action_plan = ActionPlan(
+            actions=[action],
+        )
 
-        action_plan.actions = [action]
-
-        intent_engine.detect.return_value = intent
+        intent_engine.detect_with_validation.return_value = IntentValidationResult(
+            is_valid=True,
+            intent=intent,
+            errors=(),
+        )
         context_engine.build.return_value = context
         action_planner.plan.return_value = action_plan
         safety_engine.evaluate.return_value = safety_result
@@ -314,6 +320,14 @@ class NIRACoreTests(SimpleTestCase):
 
         result = core.process(request)
 
+        safety_engine.evaluate.assert_called_once_with(
+            SafetyRequest(
+                action_name="open_app",
+                parameters={"app": "calculator"},
+                risk_level=SafetyLevel.LOW,
+            )
+        )
+
         self.assertEqual(result.intent, intent)
         self.assertEqual(result.context, context)
         self.assertEqual(result.action_plan, action_plan)
@@ -326,11 +340,15 @@ class NIRACoreTests(SimpleTestCase):
             [action_result],
         )
 
-        intent_engine.detect.assert_called_once_with(request)
+        intent_engine.detect_with_validation.assert_called_once_with(request, context=context)
         context_engine.build.assert_called_once_with(request)
         action_planner.plan.assert_called_once_with(intent)
         safety_engine.evaluate.assert_called_once_with(
-            safety_request
+            SafetyRequest(
+                action_name="open_app",
+                parameters={"app": "calculator"},
+                risk_level=SafetyLevel.LOW,
+            )
         )
         android_action_engine.execute.assert_called_once()   
 
@@ -343,7 +361,7 @@ class NIRACoreTests(SimpleTestCase):
         safety_engine = Mock()
         android_action_engine = Mock()
 
-        intent_engine.detect.side_effect = RuntimeError(
+        intent_engine.detect_with_validation.side_effect = RuntimeError(
             "Intent detection failed."
         )
 

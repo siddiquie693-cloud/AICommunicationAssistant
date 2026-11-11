@@ -10,3 +10,13 @@ class Intent:
 
     name: str
     parameters: dict[str, Any]
+
+    def __post_init__(self):
+        if not isinstance(self.name, str):
+            raise TypeError("name must be a string.")
+
+        if not self.name.strip():
+            raise ValueError("name must not be empty.")
+
+        if not isinstance(self.parameters, dict):
+            raise TypeError("parameters must be a dictionary.")
