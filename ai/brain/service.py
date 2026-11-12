@@ -158,8 +158,26 @@ class NIRABrain:
                         person=person,
                         conversation=conversation,
                     )
+        clarification_method = getattr(
+            type(self.action_planner),
+            "plan_with_clarification",
+            None,
+        )
 
-        action_plan = self.action_planner.plan(intent)
+        if callable(clarification_method):
+            action_plan = self.action_planner.plan_with_clarification(intent)
+        else:
+            action_plan = self.action_planner.plan(intent)
+
+        if action_plan.requires_clarification:
+            return BrainPipelineResult(
+                intent=intent,
+                context=context,
+                action_plan=action_plan,
+                safety_results=[],
+                action_results=[],
+                validation_result=validation_result,
+            )
 
         safety_results = []
         action_results = []

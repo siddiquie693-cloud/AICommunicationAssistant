@@ -24,6 +24,20 @@ class PlannedActionTests(SimpleTestCase):
 
         self.assertEqual(action.parameters, {})
 
+    def test_planned_action_stores_dependency_metadata(self):
+        action = PlannedAction(
+            name="send_message",
+            action_id="action_2",
+            depends_on=("action_1",),
+            description="Send a message after resolving the contact.",
+        )
+
+        self.assertEqual(action.action_id, "action_2")
+        self.assertEqual(action.depends_on, ("action_1",))
+        self.assertEqual(
+            action.description,
+            "Send a message after resolving the contact.",
+        )
 
 class ActionPlanTests(SimpleTestCase):
 
@@ -50,3 +64,22 @@ class ActionPlanTests(SimpleTestCase):
         plan = ActionPlan()
 
         self.assertEqual(plan.actions, [])
+
+    def test_action_plan_stores_clarification_details(self):
+        plan = ActionPlan(
+            requires_clarification=True,
+            clarification_question="Which contact should I message?",
+        )
+
+        self.assertTrue(plan.requires_clarification)
+        self.assertEqual(
+            plan.clarification_question,
+            "Which contact should I message?",
+        )
+
+    def test_action_plan_stores_planning_errors(self):
+        plan = ActionPlan(
+            errors=("Missing recipient.",),
+        )
+
+        self.assertEqual(plan.errors, ("Missing recipient.",))
