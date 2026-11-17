@@ -51,6 +51,12 @@ import {
   getAccessToken,
 } from './storage';
 
+import {
+  COLORS,
+  SPACING,
+  RADIUS,
+  TYPOGRAPHY,
+} from './theme';
 
 export default function ConversationScreen({
   conversation,
@@ -1253,7 +1259,7 @@ export default function ConversationScreen({
                 }
               >
                 Start a conversation
-                with the AI assistant.
+                with NIRA AI.
               </Text>
             </View>
           ) : null
@@ -1286,7 +1292,8 @@ export default function ConversationScreen({
             onChangeText={
               setMessageText
             }
-            placeholder="Type a message..."
+            placeholder="Message NIRA AI..."
+            placeholderTextColor={COLORS.textSecondary}
             multiline
             maxLength={2000}
             editable={!sending}
@@ -1303,6 +1310,8 @@ export default function ConversationScreen({
         </View>
 
         <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={recording ? 'Stop voice recording' : 'Start voice recording'}
           style={[
             styles.voiceButton,
             recording &&
@@ -1320,7 +1329,7 @@ export default function ConversationScreen({
           {requestingMicrophonePermission ? (
             <ActivityIndicator
               size="small"
-              color="#ffffff"
+              color={COLORS.white}
             />
           ) : transcribing ? (
             <View
@@ -1331,7 +1340,7 @@ export default function ConversationScreen({
             >
               <ActivityIndicator
                 size="small"
-                color="#ffffff"
+                color={COLORS.white}
               />
 
               <Text
@@ -1355,6 +1364,8 @@ export default function ConversationScreen({
         </Pressable>
 
         <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Send message"
           style={[
             styles.sendButton,
             (
@@ -1374,7 +1385,7 @@ export default function ConversationScreen({
           {sending ? (
             <ActivityIndicator
               size="small"
-              color="#ffffff"
+              color={COLORS.white}
             />
           ) : (
             <Text
@@ -1391,43 +1402,44 @@ export default function ConversationScreen({
   );
 }
 
-
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: COLORS.background,
   },
 
   centerContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#f5f5f5',
+    backgroundColor: COLORS.background,
   },
 
   statusText: {
-    marginTop: 10,
-    color: '#666666',
+    marginTop: SPACING.sm,
+    color: COLORS.textSecondary,
+    fontSize: TYPOGRAPHY.small,
   },
 
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    backgroundColor: '#ffffff',
+    paddingHorizontal: SPACING.lg,
+    paddingVertical: SPACING.md,
+    backgroundColor: COLORS.surface,
     borderBottomWidth: 1,
-    borderBottomColor: '#dddddd',
+    borderBottomColor: COLORS.border,
   },
 
   backButton: {
-    paddingVertical: 6,
-    paddingRight: 12,
+    paddingVertical: SPACING.sm,
+    paddingRight: SPACING.md,
   },
 
   backButtonText: {
-    fontSize: 16,
+    fontSize: TYPOGRAPHY.body,
     fontWeight: '600',
+    color: COLORS.primary,
   },
 
   headerContent: {
@@ -1435,38 +1447,40 @@ const styles = StyleSheet.create({
   },
 
   headerTitle: {
-    fontSize: 18,
+    fontSize: TYPOGRAPHY.subtitle,
     fontWeight: '700',
+    color: COLORS.text,
   },
 
   errorContainer: {
-    padding: 12,
-    backgroundColor: '#ffecec',
+    padding: SPACING.md,
+    backgroundColor: '#FFF1F1',
     borderBottomWidth: 1,
-    borderBottomColor: '#ffcccc',
+    borderBottomColor: '#F5C6C6',
   },
 
   errorText: {
-    color: '#b00020',
-    marginBottom: 8,
+    color: COLORS.error,
+    marginBottom: SPACING.sm,
+    fontSize: TYPOGRAPHY.small,
   },
 
   retryButton: {
     alignSelf: 'flex-start',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 8,
-    backgroundColor: '#b00020',
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.sm,
+    borderRadius: RADIUS.md,
+    backgroundColor: COLORS.error,
   },
 
   retryButtonText: {
-    color: '#ffffff',
+    color: COLORS.white,
     fontWeight: '600',
   },
 
   messageList: {
-    padding: 12,
-    paddingBottom: 20,
+    padding: SPACING.md,
+    paddingBottom: SPACING.xl,
   },
 
   emptyMessageList: {
@@ -1477,24 +1491,25 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: 30,
+    paddingHorizontal: SPACING.xxxl,
   },
 
   emptyTitle: {
-    fontSize: 20,
+    fontSize: TYPOGRAPHY.title,
     fontWeight: '700',
-    marginBottom: 8,
+    marginBottom: SPACING.sm,
+    color: COLORS.text,
   },
 
   emptySubtitle: {
     textAlign: 'center',
-    color: '#666666',
-    fontSize: 15,
+    color: COLORS.textSecondary,
+    fontSize: TYPOGRAPHY.small,
   },
 
   messageRow: {
     width: '100%',
-    marginBottom: 10,
+    marginBottom: SPACING.sm,
   },
 
   userMessageRow: {
@@ -1507,83 +1522,85 @@ const styles = StyleSheet.create({
 
   messageBubble: {
     maxWidth: '82%',
-    borderRadius: 16,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
+    borderRadius: RADIUS.lg,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.sm,
   },
 
   userBubble: {
-    backgroundColor: '#dbeafe',
-    borderBottomRightRadius: 4,
+    backgroundColor: '#E5F0FF',
+    borderBottomRightRadius: RADIUS.sm,
   },
 
   assistantBubble: {
-    backgroundColor: '#ffffff',
-    borderBottomLeftRadius: 4,
+    backgroundColor: COLORS.surface,
+    borderBottomLeftRadius: RADIUS.sm,
     borderWidth: 1,
-    borderColor: '#e2e2e2',
+    borderColor: COLORS.border,
   },
 
   senderLabel: {
-    fontSize: 12,
+    fontSize: TYPOGRAPHY.caption,
     fontWeight: '700',
-    marginBottom: 4,
+    marginBottom: SPACING.xs,
   },
 
   userSenderLabel: {
-    color: '#2563eb',
+    color: COLORS.primary,
   },
 
   assistantSenderLabel: {
-    color: '#555555',
+    color: COLORS.textSecondary,
   },
 
   messageText: {
-    fontSize: 16,
+    fontSize: TYPOGRAPHY.body,
     lineHeight: 22,
   },
 
   userMessageText: {
-    color: '#111827',
+    color: COLORS.text,
   },
 
   assistantMessageText: {
-    color: '#222222',
+    color: COLORS.text,
   },
 
   ttsButton: {
-    marginTop: 8,
+    marginTop: SPACING.sm,
     alignSelf: 'flex-start',
-    paddingVertical: 6,
-    paddingHorizontal: 10,
-    borderRadius: 8,
+    paddingVertical: SPACING.sm,
+    paddingHorizontal: SPACING.md,
+    borderRadius: RADIUS.md,
+    backgroundColor: '#EAF2FC',
   },
 
   ttsButtonText: {
-    fontSize: 14,
+    fontSize: TYPOGRAPHY.small,
     fontWeight: '600',
+    color: COLORS.primary,
   },
 
   messageFooter: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 6,
+    marginTop: SPACING.sm,
   },
 
   timestamp: {
-    fontSize: 11,
+    fontSize: TYPOGRAPHY.caption,
   },
 
   userTimestamp: {
-    color: '#64748b',
+    color: COLORS.textSecondary,
   },
 
   assistantTimestamp: {
-    color: '#888888',
+    color: COLORS.textSecondary,
   },
 
   temporaryLoader: {
-    marginLeft: 6,
+    marginLeft: SPACING.sm,
   },
 
   editContainer: {
@@ -1594,71 +1611,72 @@ const styles = StyleSheet.create({
     minHeight: 80,
     maxHeight: 180,
     borderWidth: 1,
-    borderColor: '#cccccc',
-    borderRadius: 10,
-    backgroundColor: '#ffffff',
-    padding: 10,
-    fontSize: 15,
+    borderColor: COLORS.border,
+    borderRadius: RADIUS.md,
+    backgroundColor: COLORS.surface,
+    padding: SPACING.md,
+    fontSize: TYPOGRAPHY.small,
+    color: COLORS.text,
     textAlignVertical: 'top',
   },
 
   editActions: {
     flexDirection: 'row',
     justifyContent: 'flex-end',
-    marginTop: 8,
-    gap: 8,
+    marginTop: SPACING.sm,
+    gap: SPACING.sm,
   },
 
   editActionButton: {
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 8,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.sm,
+    borderRadius: RADIUS.md,
   },
 
   cancelEditButton: {
-    backgroundColor: '#eeeeee',
+    backgroundColor: '#EEF1F5',
   },
 
   saveEditButton: {
-    backgroundColor: '#2563eb',
+    backgroundColor: COLORS.primary,
     minWidth: 60,
     alignItems: 'center',
   },
 
   cancelEditText: {
-    color: '#333333',
+    color: COLORS.text,
     fontWeight: '600',
   },
 
   saveEditText: {
-    color: '#ffffff',
+    color: COLORS.white,
     fontWeight: '600',
   },
 
   composerContainer: {
     flexDirection: 'row',
     alignItems: 'flex-end',
-    padding: 10,
-    backgroundColor: '#ffffff',
+    padding: SPACING.md,
+    backgroundColor: COLORS.surface,
     borderTopWidth: 1,
-    borderTopColor: '#dddddd',
+    borderTopColor: COLORS.border,
   },
 
   inputWrapper: {
     flex: 1,
     position: 'relative',
-    marginRight: 8,
+    marginRight: SPACING.sm,
   },
 
   voiceButton: {
     minWidth: 70,
     height: 48,
-    paddingHorizontal: 14,
-    borderRadius: 14,
-    backgroundColor: '#2563eb',
+    paddingHorizontal: SPACING.md,
+    borderRadius: RADIUS.md,
+    backgroundColor: COLORS.primary,
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 8,
+    marginRight: SPACING.sm,
   },
 
   voiceButtonDisabled: {
@@ -1666,48 +1684,50 @@ const styles = StyleSheet.create({
   },
 
   voiceButtonText: {
-    color: '#ffffff',
-    fontSize: 15,
+    color: COLORS.white,
+    fontSize: TYPOGRAPHY.small,
     fontWeight: '700',
   },
 
   voiceErrorText: {
-    marginBottom: 8,
-    fontSize: 13,
+    marginBottom: SPACING.sm,
+    fontSize: TYPOGRAPHY.caption,
     fontWeight: '500',
+    color: COLORS.error,
   },
 
   voiceButtonRecording: {
-    backgroundColor: '#dc2626',
+    backgroundColor: COLORS.error,
   },
 
   messageInput: {
     minHeight: 48,
     maxHeight: 120,
     borderWidth: 1,
-    borderColor: '#cccccc',
-    borderRadius: 14,
-    backgroundColor: '#ffffff',
-    paddingHorizontal: 12,
-    paddingTop: 10,
+    borderColor: COLORS.border,
+    borderRadius: RADIUS.md,
+    backgroundColor: COLORS.surface,
+    paddingHorizontal: SPACING.md,
+    paddingTop: SPACING.md,
     paddingBottom: 24,
-    fontSize: 16,
+    fontSize: TYPOGRAPHY.body,
+    color: COLORS.text,
   },
 
   characterCounter: {
     position: 'absolute',
-    right: 10,
-    bottom: 6,
-    fontSize: 11,
-    color: '#888888',
+    right: SPACING.md,
+    bottom: SPACING.sm,
+    fontSize: TYPOGRAPHY.caption,
+    color: COLORS.textSecondary,
   },
 
   sendButton: {
     minWidth: 70,
     height: 48,
-    paddingHorizontal: 14,
-    borderRadius: 14,
-    backgroundColor: '#2563eb',
+    paddingHorizontal: SPACING.md,
+    borderRadius: RADIUS.md,
+    backgroundColor: COLORS.primary,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -1717,8 +1737,8 @@ const styles = StyleSheet.create({
   },
 
   sendButtonText: {
-    color: '#ffffff',
-    fontSize: 15,
+    color: COLORS.white,
+    fontSize: TYPOGRAPHY.small,
     fontWeight: '700',
   },
 });

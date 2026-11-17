@@ -32,20 +32,27 @@ import {
   getAccessToken,
 } from './storage';
 
+import {
+  COLORS,
+  SPACING,
+  RADIUS,
+  TYPOGRAPHY,
+} from './theme';
 
 const NIRA_COLORS = {
-  primary: '#6C5CE7',
-  primaryDark: '#5145B8',
+  primary: COLORS.primary,
+  primaryDark: COLORS.primaryDark,
   primaryLight: '#EEEAFE',
 
-  background: '#F7F7FC',
-  card: '#FFFFFF',
+  background: COLORS.background,
+  card: COLORS.surface,
 
-  text: '#171724',
-  secondaryText: '#68687A',
+  text: COLORS.text,
+  secondaryText: COLORS.textSecondary,
   mutedText: '#9191A2',
-  border: '#E6E4F0',
+  border: COLORS.border,
 
+  // Preserve the individual profile section colors.
   personal: '#6C5CE7',
   languages: '#3B82F6',
   communication: '#4F8CFF',
@@ -55,10 +62,9 @@ const NIRA_COLORS = {
   privacy: '#27AE8A',
   memory: '#8E6CE8',
 
-  error: '#D64545',
+  error: COLORS.error,
   success: '#2E9B63',
 };
-
 
 const SECTION_CONFIG = {
   personal: {
@@ -1838,67 +1844,64 @@ const FieldError = ({
   );
 };
 
-
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor:
-      NIRA_COLORS.background,
+    backgroundColor: NIRA_COLORS.background,
   },
 
   container: {
-    paddingHorizontal: 16,
-    paddingTop: 10,
-    paddingBottom: 50,
+    paddingHorizontal: SPACING.lg,
+    paddingTop: SPACING.sm,
+    paddingBottom: SPACING.xxxl + SPACING.lg,
   },
 
   /* HEADER */
 
   profileHeader: {
-    marginBottom: 8,
-    paddingHorizontal: 4,
-    paddingTop: 2,
+    marginBottom: SPACING.sm,
+    paddingHorizontal: SPACING.xs,
+    paddingTop: SPACING.xs / 2,
   },
 
   headerTopRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 22,
+    marginBottom: SPACING.xxl,
   },
 
   backButton: {
     minHeight: 44,
     flexDirection: 'row',
     alignItems: 'center',
-    paddingRight: 10,
+    paddingRight: SPACING.sm,
   },
 
   backButtonText: {
-    fontSize: 32,
+    fontSize: TYPOGRAPHY.display,
     lineHeight: 34,
     fontWeight: '300',
     color: NIRA_COLORS.text,
-    marginRight: 4,
+    marginRight: SPACING.xs,
   },
 
   backLabel: {
-    fontSize: 15,
+    fontSize: TYPOGRAPHY.small,
     fontWeight: '600',
     color: NIRA_COLORS.secondaryText,
   },
 
   niraBadge: {
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    borderRadius: 20,
-    backgroundColor:
-      NIRA_COLORS.primaryLight,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.sm - 1,
+    borderRadius: RADIUS.pill,
+    backgroundColor: NIRA_COLORS.primaryLight,
   },
 
   niraBadgeText: {
     color: NIRA_COLORS.primaryDark,
-    fontSize: 12,
+    fontSize: TYPOGRAPHY.caption,
     fontWeight: '800',
     letterSpacing: 1,
   },
@@ -1911,17 +1914,16 @@ const styles = StyleSheet.create({
   profileAvatar: {
     width: 58,
     height: 58,
-    borderRadius: 18,
-    backgroundColor:
-      NIRA_COLORS.primary,
+    borderRadius: RADIUS.lg + 2,
+    backgroundColor: NIRA_COLORS.primary,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 14,
+    marginRight: SPACING.md + 2,
   },
 
   profileAvatarText: {
-    color: '#FFFFFF',
-    fontSize: 26,
+    color: COLORS.white,
+    fontSize: TYPOGRAPHY.heading - 2,
     fontWeight: '800',
   },
 
@@ -1931,15 +1933,15 @@ const styles = StyleSheet.create({
   },
 
   title: {
-    fontSize: 27,
+    fontSize: TYPOGRAPHY.heading,
     lineHeight: 33,
     fontWeight: '800',
     color: NIRA_COLORS.text,
-    marginBottom: 6,
+    marginBottom: SPACING.xs + 2,
   },
 
   description: {
-    fontSize: 14,
+    fontSize: TYPOGRAPHY.small,
     lineHeight: 20,
     color: NIRA_COLORS.secondaryText,
   },
@@ -1947,59 +1949,54 @@ const styles = StyleSheet.create({
   headerAccent: {
     height: 5,
     flexDirection: 'row',
-    marginTop: 22,
-    borderRadius: 5,
+    marginTop: SPACING.xxl,
+    borderRadius: RADIUS.sm,
     overflow: 'hidden',
   },
 
   headerAccentPrimary: {
     flex: 5,
-    backgroundColor:
-      NIRA_COLORS.primary,
+    backgroundColor: NIRA_COLORS.primary,
   },
 
   headerAccentSecondary: {
     flex: 2,
-    backgroundColor:
-      NIRA_COLORS.communication,
+    backgroundColor: NIRA_COLORS.communication,
   },
 
   headerAccentTertiary: {
     flex: 1,
-    backgroundColor:
-      NIRA_COLORS.memory,
+    backgroundColor: NIRA_COLORS.memory,
   },
 
   /* SECTION CARDS */
 
   sectionCard: {
-    backgroundColor:
-      NIRA_COLORS.card,
-    borderRadius: 18,
-    padding: 17,
-    marginTop: 16,
+    backgroundColor: NIRA_COLORS.card,
+    borderRadius: RADIUS.lg,
+    padding: SPACING.lg,
+    marginTop: SPACING.lg,
     borderWidth: 1,
-    borderColor:
-      NIRA_COLORS.border,
+    borderColor: NIRA_COLORS.border,
   },
 
   sectionHeader: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    marginBottom: 5,
+    marginBottom: SPACING.xs,
   },
 
   sectionIcon: {
     width: 42,
     height: 42,
-    borderRadius: 13,
+    borderRadius: RADIUS.md + 1,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 12,
+    marginRight: SPACING.md,
   },
 
   sectionIconText: {
-    fontSize: 19,
+    fontSize: TYPOGRAPHY.subtitle + 1,
     fontWeight: '800',
   },
 
@@ -2009,15 +2006,15 @@ const styles = StyleSheet.create({
   },
 
   sectionTitle: {
-    fontSize: 18,
+    fontSize: TYPOGRAPHY.subtitle,
     lineHeight: 23,
     fontWeight: '800',
     color: NIRA_COLORS.text,
   },
 
   sectionDescription: {
-    marginTop: 3,
-    fontSize: 13,
+    marginTop: SPACING.xs - 1,
+    fontSize: TYPOGRAPHY.caption + 1,
     lineHeight: 18,
     color: NIRA_COLORS.secondaryText,
   },
@@ -2025,37 +2022,33 @@ const styles = StyleSheet.create({
   /* INPUTS */
 
   label: {
-    fontSize: 14,
+    fontSize: TYPOGRAPHY.small,
     fontWeight: '700',
     color: NIRA_COLORS.text,
-    marginTop: 17,
-    marginBottom: 8,
+    marginTop: SPACING.lg + 1,
+    marginBottom: SPACING.sm,
   },
 
   input: {
     minHeight: 50,
     borderWidth: 1,
-    borderColor:
-      NIRA_COLORS.border,
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    fontSize: 16,
+    borderColor: NIRA_COLORS.border,
+    borderRadius: RADIUS.md,
+    paddingHorizontal: SPACING.md + 2,
+    paddingVertical: SPACING.md,
+    fontSize: TYPOGRAPHY.body,
     lineHeight: 21,
-    backgroundColor:
-      NIRA_COLORS.background,
+    backgroundColor: NIRA_COLORS.background,
     color: NIRA_COLORS.text,
   },
 
   selectInput: {
     minHeight: 50,
     borderWidth: 1,
-    borderColor:
-      NIRA_COLORS.border,
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    backgroundColor:
-      NIRA_COLORS.background,
+    borderColor: NIRA_COLORS.border,
+    borderRadius: RADIUS.md,
+    paddingHorizontal: SPACING.md + 2,
+    backgroundColor: NIRA_COLORS.background,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -2073,21 +2066,21 @@ const styles = StyleSheet.create({
   },
 
   selectDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    marginRight: 10,
+    width: SPACING.sm,
+    height: SPACING.sm,
+    borderRadius: RADIUS.sm / 2,
+    marginRight: SPACING.sm + 2,
   },
 
   selectText: {
     flex: 1,
-    fontSize: 16,
+    fontSize: TYPOGRAPHY.body,
     color: NIRA_COLORS.text,
   },
 
   placeholderText: {
     flex: 1,
-    fontSize: 16,
+    fontSize: TYPOGRAPHY.body,
     color: NIRA_COLORS.mutedText,
   },
 
@@ -2095,7 +2088,7 @@ const styles = StyleSheet.create({
     fontSize: 27,
     lineHeight: 27,
     color: NIRA_COLORS.secondaryText,
-    marginLeft: 10,
+    marginLeft: SPACING.sm + 2,
   },
 
   multilineInput: {
@@ -2104,16 +2097,13 @@ const styles = StyleSheet.create({
 
   jsonInput: {
     minHeight: 165,
-    fontFamily:
-      Platform.OS === 'ios'
-        ? 'Menlo'
-        : 'monospace',
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
     textAlignVertical: 'top',
   },
 
   helperText: {
-    marginTop: 7,
-    fontSize: 12,
+    marginTop: SPACING.sm - 1,
+    fontSize: TYPOGRAPHY.caption,
     lineHeight: 18,
     color: NIRA_COLORS.mutedText,
   },
@@ -2121,11 +2111,10 @@ const styles = StyleSheet.create({
   /* PRIVACY / MEMORY */
 
   securityNotice: {
-    marginTop: 14,
-    padding: 12,
-    borderRadius: 12,
-    backgroundColor:
-      NIRA_COLORS.privacy + '0D',
+    marginTop: SPACING.md + 2,
+    padding: SPACING.md,
+    borderRadius: RADIUS.md,
+    backgroundColor: NIRA_COLORS.privacy + '0D',
     flexDirection: 'row',
     alignItems: 'flex-start',
   },
@@ -2133,28 +2122,28 @@ const styles = StyleSheet.create({
   noticeIcon: {
     width: 30,
     height: 30,
-    borderRadius: 10,
+    borderRadius: RADIUS.md - 2,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 10,
+    marginRight: SPACING.sm + 2,
   },
 
   noticeIconText: {
-    fontSize: 15,
+    fontSize: TYPOGRAPHY.small + 1,
     fontWeight: '800',
   },
 
   noticeText: {
     flex: 1,
-    fontSize: 12,
+    fontSize: TYPOGRAPHY.caption,
     lineHeight: 18,
     color: NIRA_COLORS.secondaryText,
   },
 
   memoryBanner: {
-    marginTop: 14,
-    borderRadius: 14,
-    padding: 12,
+    marginTop: SPACING.md + 2,
+    borderRadius: RADIUS.lg - 2,
+    padding: SPACING.md,
     flexDirection: 'row',
     alignItems: 'flex-start',
   },
@@ -2162,14 +2151,14 @@ const styles = StyleSheet.create({
   memoryIcon: {
     width: 36,
     height: 36,
-    borderRadius: 12,
+    borderRadius: RADIUS.md,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 10,
+    marginRight: SPACING.sm + 2,
   },
 
   memoryIconText: {
-    fontSize: 18,
+    fontSize: TYPOGRAPHY.subtitle,
     fontWeight: '800',
   },
 
@@ -2179,14 +2168,14 @@ const styles = StyleSheet.create({
   },
 
   memoryBannerTitle: {
-    fontSize: 14,
+    fontSize: TYPOGRAPHY.small,
     fontWeight: '800',
     color: NIRA_COLORS.text,
-    marginBottom: 3,
+    marginBottom: SPACING.xs - 1,
   },
 
   memoryBannerDescription: {
-    fontSize: 12,
+    fontSize: TYPOGRAPHY.caption,
     lineHeight: 18,
     color: NIRA_COLORS.secondaryText,
   },
@@ -2194,54 +2183,50 @@ const styles = StyleSheet.create({
   /* ERRORS */
 
   errorContainer: {
-    marginTop: 14,
-    padding: 12,
-    borderRadius: 12,
-    backgroundColor:
-      NIRA_COLORS.error + '0D',
+    marginTop: SPACING.md + 2,
+    padding: SPACING.md,
+    borderRadius: RADIUS.md,
+    backgroundColor: NIRA_COLORS.error + '0D',
     borderWidth: 1,
-    borderColor:
-      NIRA_COLORS.error + '25',
+    borderColor: NIRA_COLORS.error + '25',
     flexDirection: 'row',
     alignItems: 'flex-start',
   },
 
   errorDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor:
-      NIRA_COLORS.error,
-    marginTop: 6,
-    marginRight: 9,
+    width: SPACING.sm,
+    height: SPACING.sm,
+    borderRadius: RADIUS.sm / 2,
+    backgroundColor: NIRA_COLORS.error,
+    marginTop: SPACING.xs + 2,
+    marginRight: SPACING.sm + 1,
   },
 
   errorText: {
     flex: 1,
     color: NIRA_COLORS.error,
-    fontSize: 13,
+    fontSize: TYPOGRAPHY.caption + 1,
     lineHeight: 19,
   },
 
   fieldErrorText: {
     color: NIRA_COLORS.error,
-    marginTop: 7,
-    fontSize: 12,
+    marginTop: SPACING.sm - 1,
+    fontSize: TYPOGRAPHY.caption,
     lineHeight: 17,
   },
 
   /* SAVE */
 
   saveButton: {
-    marginTop: 22,
+    marginTop: SPACING.xxl - 2,
     minHeight: 54,
-    borderRadius: 15,
-    backgroundColor:
-      NIRA_COLORS.primary,
+    borderRadius: RADIUS.lg - 1,
+    backgroundColor: NIRA_COLORS.primary,
     alignItems: 'center',
     justifyContent: 'center',
     flexDirection: 'row',
-    paddingHorizontal: 20,
+    paddingHorizontal: SPACING.xl,
   },
 
   disabledButton: {
@@ -2249,27 +2234,27 @@ const styles = StyleSheet.create({
   },
 
   saveButtonIcon: {
-    color: '#FFFFFF',
-    fontSize: 18,
+    color: COLORS.white,
+    fontSize: TYPOGRAPHY.subtitle,
     fontWeight: '800',
-    marginRight: 8,
+    marginRight: SPACING.sm,
   },
 
   saveButtonText: {
-    color: '#FFFFFF',
-    fontSize: 16,
+    color: COLORS.white,
+    fontSize: TYPOGRAPHY.body,
     fontWeight: '800',
   },
 
   bottomNoteContainer: {
-    paddingHorizontal: 12,
-    paddingTop: 12,
+    paddingHorizontal: SPACING.md,
+    paddingTop: SPACING.md,
   },
 
   bottomNote: {
     textAlign: 'center',
     color: NIRA_COLORS.mutedText,
-    fontSize: 12,
+    fontSize: TYPOGRAPHY.caption,
     lineHeight: 18,
   },
 
@@ -2277,40 +2262,38 @@ const styles = StyleSheet.create({
 
   loadingScreen: {
     flex: 1,
-    backgroundColor:
-      NIRA_COLORS.background,
+    backgroundColor: NIRA_COLORS.background,
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 24,
+    padding: SPACING.xxl,
   },
 
   loadingIcon: {
     width: 64,
     height: 64,
-    borderRadius: 20,
-    backgroundColor:
-      NIRA_COLORS.primary,
+    borderRadius: RADIUS.xl - 4,
+    backgroundColor: NIRA_COLORS.primary,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 22,
+    marginBottom: SPACING.xxl - 2,
   },
 
   loadingIconText: {
-    color: '#FFFFFF',
-    fontSize: 30,
+    color: COLORS.white,
+    fontSize: TYPOGRAPHY.display - 2,
     fontWeight: '800',
   },
 
   statusText: {
-    marginTop: 14,
-    fontSize: 16,
+    marginTop: SPACING.md + 2,
+    fontSize: TYPOGRAPHY.body,
     fontWeight: '700',
     color: NIRA_COLORS.text,
   },
 
   statusSubtext: {
-    marginTop: 5,
-    fontSize: 13,
+    marginTop: SPACING.xs + 1,
+    fontSize: TYPOGRAPHY.caption + 1,
     color: NIRA_COLORS.secondaryText,
     textAlign: 'center',
   },
@@ -2319,52 +2302,49 @@ const styles = StyleSheet.create({
 
   errorScreen: {
     flex: 1,
-    backgroundColor:
-      NIRA_COLORS.background,
+    backgroundColor: NIRA_COLORS.background,
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 24,
+    padding: SPACING.xxl,
   },
 
   errorIcon: {
     width: 58,
     height: 58,
-    borderRadius: 18,
-    backgroundColor:
-      NIRA_COLORS.error + '15',
+    borderRadius: RADIUS.lg + 2,
+    backgroundColor: NIRA_COLORS.error + '15',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 15,
+    marginBottom: SPACING.md + 3,
   },
 
   errorIconText: {
     color: NIRA_COLORS.error,
-    fontSize: 25,
+    fontSize: TYPOGRAPHY.heading - 3,
     fontWeight: '800',
   },
 
   errorTitle: {
-    fontSize: 21,
+    fontSize: TYPOGRAPHY.subtitle + 3,
     fontWeight: '800',
     color: NIRA_COLORS.text,
-    marginBottom: 8,
+    marginBottom: SPACING.sm,
   },
 
   retryButton: {
-    marginTop: 18,
+    marginTop: SPACING.lg + 2,
     minHeight: 48,
-    paddingHorizontal: 26,
-    paddingVertical: 13,
-    borderRadius: 12,
-    backgroundColor:
-      NIRA_COLORS.primary,
+    paddingHorizontal: SPACING.xxl + 2,
+    paddingVertical: SPACING.md + 1,
+    borderRadius: RADIUS.md,
+    backgroundColor: NIRA_COLORS.primary,
     justifyContent: 'center',
     alignItems: 'center',
   },
 
   retryButtonText: {
-    color: '#FFFFFF',
-    fontSize: 15,
+    color: COLORS.white,
+    fontSize: TYPOGRAPHY.small + 1,
     fontWeight: '700',
   },
 
@@ -2372,30 +2352,27 @@ const styles = StyleSheet.create({
 
   modalOverlay: {
     flex: 1,
-    backgroundColor:
-      'rgba(15, 15, 25, 0.48)',
+    backgroundColor: 'rgba(15, 15, 25, 0.48)',
     justifyContent: 'flex-end',
   },
 
   languagePicker: {
-    backgroundColor:
-      NIRA_COLORS.card,
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    paddingHorizontal: 18,
-    paddingTop: 9,
-    paddingBottom: 20,
+    backgroundColor: NIRA_COLORS.card,
+    borderTopLeftRadius: RADIUS.xl,
+    borderTopRightRadius: RADIUS.xl,
+    paddingHorizontal: SPACING.lg + 2,
+    paddingTop: SPACING.sm + 1,
+    paddingBottom: SPACING.xl,
     maxHeight: '84%',
   },
 
   modalHandle: {
     width: 42,
     height: 4,
-    borderRadius: 4,
+    borderRadius: RADIUS.xs,
     alignSelf: 'center',
-    backgroundColor:
-      NIRA_COLORS.border,
-    marginBottom: 15,
+    backgroundColor: NIRA_COLORS.border,
+    marginBottom: SPACING.md + 3,
   },
 
   modalHeader: {
@@ -2408,13 +2385,12 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '800',
     letterSpacing: 1.2,
-    color:
-      NIRA_COLORS.primary,
-    marginBottom: 3,
+    color: NIRA_COLORS.primary,
+    marginBottom: SPACING.xs - 1,
   },
 
   modalTitle: {
-    fontSize: 21,
+    fontSize: TYPOGRAPHY.subtitle + 3,
     fontWeight: '800',
     color: NIRA_COLORS.text,
   },
@@ -2422,9 +2398,8 @@ const styles = StyleSheet.create({
   modalCloseButton: {
     width: 42,
     height: 42,
-    borderRadius: 14,
-    backgroundColor:
-      NIRA_COLORS.background,
+    borderRadius: RADIUS.md + 2,
+    backgroundColor: NIRA_COLORS.background,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -2437,48 +2412,45 @@ const styles = StyleSheet.create({
   },
 
   modalDescription: {
-    marginTop: 6,
-    marginBottom: 12,
-    fontSize: 13,
+    marginTop: SPACING.sm - 2,
+    marginBottom: SPACING.md,
+    fontSize: TYPOGRAPHY.caption + 1,
     lineHeight: 19,
     color: NIRA_COLORS.secondaryText,
   },
 
   languageList: {
-    marginBottom: 10,
+    marginBottom: SPACING.sm + 2,
   },
 
   languageOption: {
     minHeight: 68,
-    paddingVertical: 10,
-    paddingHorizontal: 8,
-    borderRadius: 14,
+    paddingVertical: SPACING.sm + 2,
+    paddingHorizontal: SPACING.sm,
+    borderRadius: RADIUS.lg - 2,
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 5,
+    marginBottom: SPACING.xs + 1,
   },
 
   languageOptionSelected: {
-    backgroundColor:
-      NIRA_COLORS.primaryLight,
+    backgroundColor: NIRA_COLORS.primaryLight,
   },
 
   languageOptionIcon: {
     width: 42,
     height: 42,
-    borderRadius: 13,
-    backgroundColor:
-      NIRA_COLORS.background,
+    borderRadius: RADIUS.md + 1,
+    backgroundColor: NIRA_COLORS.background,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 11,
+    marginRight: SPACING.sm + 3,
   },
 
   languageOptionIconText: {
-    fontSize: 17,
+    fontSize: TYPOGRAPHY.body + 1,
     fontWeight: '800',
-    color:
-      NIRA_COLORS.primaryDark,
+    color: NIRA_COLORS.primaryDark,
   },
 
   languageOptionContent: {
@@ -2487,21 +2459,21 @@ const styles = StyleSheet.create({
   },
 
   languageOptionName: {
-    fontSize: 15,
+    fontSize: TYPOGRAPHY.small + 1,
     fontWeight: '700',
     color: NIRA_COLORS.text,
   },
 
   languageNativeName: {
-    marginTop: 3,
-    fontSize: 12,
+    marginTop: SPACING.xs - 1,
+    fontSize: TYPOGRAPHY.caption,
     color: NIRA_COLORS.secondaryText,
   },
 
   languageOptionRight: {
     alignItems: 'flex-end',
     justifyContent: 'center',
-    marginLeft: 8,
+    marginLeft: SPACING.sm,
   },
 
   languageCode: {
@@ -2514,47 +2486,44 @@ const styles = StyleSheet.create({
   selectedCheck: {
     width: 22,
     height: 22,
-    borderRadius: 7,
-    backgroundColor:
-      NIRA_COLORS.primary,
+    borderRadius: RADIUS.sm - 1,
+    backgroundColor: NIRA_COLORS.primary,
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 4,
+    marginTop: SPACING.xs,
   },
 
   selectedCheckText: {
-    color: '#FFFFFF',
-    fontSize: 12,
+    color: COLORS.white,
+    fontSize: TYPOGRAPHY.caption,
     fontWeight: '800',
   },
 
   emptyLanguageState: {
-    paddingVertical: 30,
+    paddingVertical: SPACING.xxxl,
     alignItems: 'center',
   },
 
   emptyLanguageText: {
     color: NIRA_COLORS.secondaryText,
-    fontSize: 14,
+    fontSize: TYPOGRAPHY.small,
     textAlign: 'center',
   },
 
   cancelButton: {
     minHeight: 48,
-    marginTop: 4,
-    borderRadius: 13,
-    backgroundColor:
-      NIRA_COLORS.background,
+    marginTop: SPACING.xs,
+    borderRadius: RADIUS.md + 1,
+    backgroundColor: NIRA_COLORS.background,
     alignItems: 'center',
     justifyContent: 'center',
   },
 
   cancelButtonText: {
-    fontSize: 15,
+    fontSize: TYPOGRAPHY.small + 1,
     fontWeight: '700',
     color: NIRA_COLORS.text,
   },
 });
-
 
 export default NIRAPersonalProfileScreen;

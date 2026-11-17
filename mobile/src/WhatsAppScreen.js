@@ -1,119 +1,153 @@
-import React, {
-  useState,
-} from 'react';
+
+import React, { useState } from 'react';
 
 import {
-  ActivityIndicator,
-  KeyboardAvoidingView,
-  Platform,
+  View,
+  Text,
   Pressable,
   ScrollView,
   StyleSheet,
-  Text,
   TextInput,
-  View,
+  KeyboardAvoidingView,
+  Platform,
   useWindowDimensions,
 } from 'react-native';
 
 import * as Clipboard from 'expo-clipboard';
+
+import {
+  COLORS,
+  SPACING,
+  RADIUS,
+  TYPOGRAPHY,
+} from './theme';
+
+import NIRAHeader from './components/NIRAHeader';
+import NIRACard from './components/NIRACard';
+import NIRAButton from './components/NIRAButton';
+import NIRALoader from './components/NIRALoader';
+import NIRABadge from './components/NIRABadge';
+import NIRAEmptyState from './components/NIRAEmptyState';
+
 import NotificationBanner from './NotificationBanner';
 
-import {
-  createConversation,
-} from './conversations';
-
-import {
-  streamAIMessage,
-} from './messages';
-
-import {
-  getAccessToken,
-} from './storage';
+import { createConversation } from './conversations';
+import { streamAIMessage } from './messages';
+import { getAccessToken } from './storage';
 
 export default function WhatsAppScreen({
   preferredLanguage,
   onBack,
 }) {
-  const {width} = useWindowDimensions();
+  const { width } = useWindowDimensions();
 
-  const horizontalPadding = width < 360 ? 12 : width < 600 ? 16 : 24;
+  const horizontalPadding =
+    width < 360 ? 12 : width < 600 ? 16 : 24;
 
-  const contentMaxWidth = width >= 900 ? 760 : undefined;
+  const contentMaxWidth =
+    width >= 900 ? 760 : undefined;
 
-  const [recipient, setRecipient] =
-    useState('');
+  const [recipient, setRecipient] = useState('');
+  const [messageText, setMessageText] = useState('');
+  const [suggestedReply, setSuggestedReply] = useState('');
 
-  const [messageText, setMessageText] =
-    useState('');
+  const [loading, setLoading] = useState(false);
+  const [copying, setCopying] = useState(false);
 
-  const [suggestedReply, setSuggestedReply] =
-    useState('');
-
-  const [loading, setLoading] =
-    useState(false);
-
-  const [copying, setCopying] =
-    useState(false);
-
-  const [error, setError] =
-    useState('');
-  const [notification, setNotification] = useState({
-    visible: false,
-    type: 'info',
-    message: '',
-  }); 
-
-  const [recipientError, setRecipientError] =
-    useState('');
-
-  const [messageError, setMessageError] =
-    useState('');
+  const [error, setError] = useState('');
+  const [recipientError, setRecipientError] = useState('');
+  const [messageError, setMessageError] = useState('');
 
   const [generationStarted, setGenerationStarted] =
     useState(false);
 
+  const [notification, setNotification] = useState({
+    visible: false,
+    type: 'info',
+    message: '',
+  });
+
   const activeLanguage =
     preferredLanguage?.trim() || 'en';
 
-  const handleRecipientChange = (value) => {
-    setRecipient(value);
+  // --------------------------------
+  // Notification handling
+  // --------------------------------
 
-    const normalized = value
-        .trim()
-        .replace(/[\s\-().]/g, '');
-
-    if (!value.trim()) {
-        setRecipientError('');
-        return;
-    }
-
-    if (!/^\+?[0-9]{7,15}$/.test(normalized)) {
-        setRecipientError(
-        'Please enter a valid phone number with country code.'
-        );
-        return;
-    }
-
-    setRecipientError('');
-    };
   const showNotification = (
     message,
     type = 'info'
   ) => {
     setNotification({
-        visible: true,
-        type,
-        message,
+      visible: true,
+      type,
+      message,
     });
   };
-  
+
   const dismissNotification = () => {
     setNotification({
-        visible: false,
-        type: 'info',
-        message: '',
+      visible: false,
+      type: 'info',
+      message: '',
     });
   };
+
+  // --------------------------------
+  // Recipient validation
+  // --------------------------------
+
+  const handleRecipientChange = (value) => {
+    setRecipient(value);
+
+    const normalized = value
+      .trim()
+      .replace(/[\s\-().]/g, '');
+
+    if (!value.trim()) {
+      setRecipientError('');
+      return;
+    }
+
+    if (!/^\+?[0-9]{7,15}$/.test(normalized)) {
+      setRecipientError(
+        'Please enter a valid phone number with country code.'
+      );
+      return;
+    }
+
+    setRecipientError('');
+  };
+
+  const validateRecipient = () => {
+    const normalizedRecipient = recipient.trim();
+
+    if (!normalizedRecipient) {
+      setRecipientError(
+        'Please enter a WhatsApp recipient phone number.'
+      );
+      return false;
+    }
+
+    const digitsOnly = normalizedRecipient.replace(
+      /[\s\-().]/g,
+      ''
+    );
+
+    if (!/^\+?[0-9]{7,15}$/.test(digitsOnly)) {
+      setRecipientError(
+        'Please enter a valid phone number with country code.'
+      );
+      return false;
+    }
+
+    setRecipientError('');
+    return true;
+  };
+
+  // --------------------------------
+  // Message handling
+  // --------------------------------
 
   const handleMessageChange = (value) => {
     setMessageText(value);
@@ -126,46 +160,9 @@ export default function WhatsAppScreen({
     }
   };
 
-  const validateRecipient = () => {
-    const normalizedRecipient =
-      recipient.trim();
-
-    if (!normalizedRecipient) {
-      setRecipientError(
-        'Please enter a WhatsApp recipient phone number.'
-      );
-      return false;
-    }
-
-    const digitsOnly =
-      normalizedRecipient.replace(
-        /[\s\-().]/g,
-        ''
-      );
-
-    if (
-      !/^\+?[0-9]{7,15}$/.test(
-        digitsOnly
-      )
-    ) {
-      setRecipientError(
-        'Please enter a valid phone number with country code.'
-      );
-      return false;
-    }
-
-    setRecipientError('');
-    return true;
-  };
-
   const validateMessage = () => {
-    const normalizedMessage =
-      messageText.trim();
-
-    if (!normalizedMessage) {
-      setMessageError(
-        'Please enter a message.'
-      );
+    if (!messageText.trim()) {
+      setMessageError('Please enter a message.');
       return false;
     }
 
@@ -173,109 +170,99 @@ export default function WhatsAppScreen({
     return true;
   };
 
-  const handleGenerateSuggestion =
-    async () => {
-      setError('');
+  // --------------------------------
+  // Generate AI suggestion
+  // --------------------------------
+
+  const handleGenerateSuggestion = async () => {
+    setError('');
+    setSuggestedReply('');
+    setGenerationStarted(true);
+
+    const recipientValid = validateRecipient();
+    const messageValid = validateMessage();
+
+    if (!recipientValid || !messageValid) {
+      setGenerationStarted(false);
+      return;
+    }
+
+    try {
+      setLoading(true);
+
+      const token = await getAccessToken();
+
+      if (!token) {
+        throw new Error(
+          'Your session has expired. Please log in again.'
+        );
+      }
+
+      const conversation = await createConversation(
+        token,
+        `WhatsApp - ${recipient.trim()}`
+      );
+
+      if (!conversation || !conversation.id) {
+        throw new Error(
+          'Unable to create an AI conversation.'
+        );
+      }
+
+      let generatedReply = '';
+
+      await streamAIMessage(
+        token,
+        conversation.id,
+        messageText.trim(),
+        activeLanguage,
+        (chunk) => {
+          generatedReply += chunk;
+
+          setSuggestedReply(
+            (current) => current + chunk
+          );
+        }
+      );
+
+      generatedReply = generatedReply.trim();
+
+      if (!generatedReply) {
+        throw new Error(
+          'The AI returned an empty response. Please try again.'
+        );
+      }
+
+      setSuggestedReply(generatedReply);
+
+      showNotification(
+        'AI reply generated successfully.',
+        'success'
+      );
+
+    } catch (error) {
       setSuggestedReply('');
-      setGenerationStarted(true);
 
-      const recipientValid =
-        validateRecipient();
+      const errorMessage =
+        error?.message ||
+        'Unable to generate an AI reply. Please try again.';
 
-      const messageValid =
-        validateMessage();
+      setError(errorMessage);
 
-      if (
-        !recipientValid ||
-        !messageValid
-      ) {
-        setGenerationStarted(false);
-        return;
-      }
+      showNotification(errorMessage, 'error');
 
-      try {
-        setLoading(true);
+    } finally {
+      setLoading(false);
+      setGenerationStarted(false);
+    }
+  };
 
-        const token =
-          await getAccessToken();
-
-        if (!token) {
-          throw new Error(
-            'Your session has expired. Please log in again.'
-          );
-        }
-
-        const conversation =
-          await createConversation(
-            token,
-            `WhatsApp - ${recipient.trim()}`
-          );
-
-        if (
-          !conversation ||
-          !conversation.id
-        ) {
-          throw new Error(
-            'Unable to create an AI conversation.'
-          );
-        }
-
-        let generatedReply = '';
-
-        await streamAIMessage(
-          token,
-          conversation.id,
-          messageText.trim(),
-          activeLanguage,
-          (chunk) => {
-            generatedReply += chunk;
-
-            setSuggestedReply(
-              (current) =>
-                current + chunk
-            );
-          }
-        );
-
-        generatedReply =
-          generatedReply.trim();
-
-        if (!generatedReply) {
-          throw new Error(
-            'The AI returned an empty response. Please try again.'
-          );
-        }
-
-        setSuggestedReply(
-          generatedReply
-        );
-
-        showNotification(
-            'AI reply generated successfully.',
-            'success'
-        );
-      } catch (error) {
-        setSuggestedReply('');
-
-        setError(
-          error?.message ||
-            'Unable to generate an AI reply. Please try again.'
-        );
-
-        showNotification(
-          error?.message ||
-            'Unable to generate an AI reply. Please try again.',
-          'error'
-        );
-      } finally {
-        setLoading(false);
-        setGenerationStarted(false);
-      }
-    };
+  // --------------------------------
+  // Use AI suggestion
+  // --------------------------------
 
   const handleUseSuggestion = () => {
-    const suggestion =
-      suggestedReply.trim();
+    const suggestion = suggestedReply.trim();
 
     if (!suggestion) {
       return;
@@ -286,268 +273,144 @@ export default function WhatsAppScreen({
     setError('');
   };
 
-  const handleCopySuggestion =
-    async () => {
-      const suggestion =
-        suggestedReply.trim();
+  // --------------------------------
+  // Copy AI suggestion
+  // --------------------------------
 
-      if (!suggestion) {
-        return;
-      }
+  const handleCopySuggestion = async () => {
+    const suggestion = suggestedReply.trim();
 
-      try {
-        setCopying(true);
+    if (!suggestion) {
+      return;
+    }
 
-        await Clipboard.setStringAsync(
-          suggestion
-        );
+    try {
+      setCopying(true);
 
-        setError('');
-      } catch (error) {
-        setError(
-          'Unable to copy the AI suggestion. Please try again.'
-        );
-      } finally {
-        setCopying(false);
-      }
-    };
+      await Clipboard.setStringAsync(suggestion);
+
+      setError('');
+
+      showNotification(
+        'AI suggestion copied successfully.',
+        'success'
+      );
+
+    } catch (error) {
+      setError(
+        'Unable to copy the AI suggestion. Please try again.'
+      );
+
+    } finally {
+      setCopying(false);
+    }
+  };
+
+  // --------------------------------
+  // AI suggestion display
+  // --------------------------------
 
   const renderSuggestionState = () => {
-    if (
-      loading &&
-      !suggestedReply
-    ) {
+    if (loading && !suggestedReply) {
       return (
-        <View
-          style={
-            styles.suggestionLoading
-          }
-          accessible
-          accessibilityRole="progressbar"
-          accessibilityLabel="Generating AI reply"
-        >
-          <ActivityIndicator
+        <View style={styles.loadingContainer}>
+          <NIRALoader
+            message="Generating AI reply..."
             size="small"
-            color="#2563eb"
           />
-
-          <Text
-            style={
-              styles.loadingSuggestionText
-            }
-          >
-            Generating AI reply...
-          </Text>
         </View>
       );
     }
 
-    if (
-      loading &&
-      suggestedReply
-    ) {
+    if (loading && suggestedReply) {
       return (
-        <>
+        <View>
           <View
-            style={
-              styles.suggestionContainer
-            }
+            style={styles.suggestionContainer}
             accessible
-            accessibilityLabel={`AI suggested reply: ${suggestedReply}`}
+            accessibilityLabel={
+              `AI suggested reply: ${suggestedReply}`
+            }
           >
-            <Text
-              style={
-                styles.suggestionText
-              }
-            >
+            <Text style={styles.suggestionText}>
               {suggestedReply}
             </Text>
           </View>
 
-          <View
-            style={
-              styles.streamingContainer
-            }
-            accessible
-            accessibilityRole="progressbar"
-            accessibilityLabel="Receiving AI response"
-          >
-            <ActivityIndicator
-              size="small"
-              color="#2563eb"
-            />
-
-            <Text
-              style={
-                styles.streamingText
-              }
-            >
-              Receiving AI response...
-            </Text>
-          </View>
-        </>
+          <NIRALoader
+            message="Receiving AI response..."
+            size="small"
+          />
+        </View>
       );
     }
 
     if (suggestedReply) {
       return (
-        <>
+        <View>
           <View
-            style={
-              styles.suggestionContainer
-            }
+            style={styles.suggestionContainer}
+            accessible
           >
-            <Text
-              style={
-                styles.suggestionText
-              }
-            >
+            <Text style={styles.suggestionText}>
               {suggestedReply}
             </Text>
           </View>
 
-          <View
-            style={styles.actionRow}
-          >
-            <Pressable
-              style={
-                styles.secondaryButton
-              }
-              onPress={
-                handleUseSuggestion
-              }
-              disabled={copying}
-              accessibilityRole="button"
-              accessibilityLabel="Use AI suggestion"
-              accessibilityHint="Replaces your message with the generated AI suggestion"
-              accessibilityState={{
-                disabled: copying,
-              }}
-            >
-              <Text
-                style={
-                  styles.secondaryButtonText
-                }
-              >
-                Use Suggestion
-              </Text>
-            </Pressable>
+          <View style={styles.actionRow}>
+            <View style={styles.actionButton}>
+              <NIRAButton
+                title="Use Suggestion"
+                variant="secondary"
+                onPress={handleUseSuggestion}
+                disabled={copying}
+              />
+            </View>
 
-            <Pressable
-              style={
-                styles.secondaryButton
-              }
-              onPress={
-                handleCopySuggestion
-              }
-              disabled={copying}
-              accessibilityRole="button"
-              accessibilityLabel={
-                copying
-                  ? 'Copying AI suggestion'
-                  : 'Copy AI suggestion'
-              }
-              accessibilityHint="Copies the generated AI reply to the clipboard"
-              accessibilityState={{
-                disabled: copying,
-                busy: copying,
-              }}
-            >
-              <Text
-                style={
-                  styles.secondaryButtonText
-                }
-              >
-                {copying
-                  ? 'Copying...'
-                  : 'Copy'}
-              </Text>
-            </Pressable>
+            <View style={styles.actionButton}>
+              <NIRAButton
+                title="Copy"
+                variant="secondary"
+                onPress={handleCopySuggestion}
+                disabled={copying}
+                loading={copying}
+              />
+            </View>
           </View>
-        </>
-      );
-    }
-
-    if (
-      generationStarted &&
-      error
-    ) {
-      return (
-        <View
-          style={
-            styles.generationErrorContainer
-          }
-          accessible
-          accessibilityRole="alert"
-          accessibilityLabel="Unable to generate an AI reply"
-        >
-          <Text
-            style={
-              styles.generationErrorTitle
-            }
-          >
-            Unable to generate a reply
-          </Text>
-
-          <Text
-            style={
-              styles.generationErrorText
-            }
-          >
-            Check the error above and try
-            generating the suggestion again.
-          </Text>
         </View>
       );
     }
 
     return (
-      <View
-        style={
-          styles.emptySuggestionContainer
-        }
-        accessible
-        accessibilityLabel="No AI suggestion yet"
-      >
-        <Text
-          style={
-            styles.emptySuggestionTitle
-          }
-        >
-          No AI suggestion yet
-        </Text>
-
-        <Text
-          style={
-            styles.emptySuggestion
-          }
-        >
-          Enter a message and select
-          Generate AI Reply to create a
-          suggested response.
-        </Text>
-      </View>
+      <NIRAEmptyState
+        title="No AI suggestion yet"
+        message="Enter a message and select Generate AI Reply to create a suggested response."
+      />
     );
   };
+
+  // --------------------------------
+  // Main screen
+  // --------------------------------
 
   return (
     <KeyboardAvoidingView
       style={styles.container}
       behavior={
-        Platform.OS === 'ios'
-          ? 'padding'
-          : 'height'
+        Platform.OS === 'ios' ? 'padding' : 'height'
       }
       keyboardVerticalOffset={
         Platform.OS === 'ios' ? 8 : 0
       }
     >
       <NotificationBanner
-        visible={notification.visible} 
+        visible={notification.visible}
         type={notification.type}
         message={notification.message}
         onDismiss={dismissNotification}
       />
+
+      {/* Header */}
 
       <View style={styles.header}>
         <Pressable
@@ -561,23 +424,16 @@ export default function WhatsAppScreen({
             disabled: loading,
           }}
         >
-          <Text
-            style={styles.backButtonText}
-          >
+          <Text style={styles.backButtonText}>
             Back
           </Text>
         </Pressable>
 
         <View style={styles.headerContent}>
-          <Text style={styles.headerTitle}>
-            WhatsApp Assistant
-          </Text>
-
-          <Text
-            style={styles.headerSubtitle}
-          >
-            Prepare WhatsApp messages with AI
-          </Text>
+          <NIRAHeader
+            title="WhatsApp Assistant"
+            subtitle="Prepare WhatsApp messages with AI"
+          />
         </View>
       </View>
 
@@ -586,8 +442,7 @@ export default function WhatsAppScreen({
         contentContainerStyle={[
           styles.scrollContent,
           {
-            paddingHorizontal:
-              horizontalPadding,
+            paddingHorizontal: horizontalPadding,
           },
           contentMaxWidth
             ? {
@@ -605,6 +460,8 @@ export default function WhatsAppScreen({
             : 'on-drag'
         }
       >
+        {/* Global error */}
+
         {error ? (
           <View
             style={styles.errorContainer}
@@ -612,19 +469,18 @@ export default function WhatsAppScreen({
             accessibilityRole="alert"
             accessibilityLabel={`Error: ${error}`}
           >
-            <Text
-              style={styles.errorText}
-            >
+            <Text style={styles.errorText}>
               {error}
             </Text>
           </View>
         ) : null}
 
         <View style={styles.content}>
-          <View style={styles.card}>
-            <Text
-              style={styles.sectionTitle}
-            >
+
+          {/* Recipient */}
+
+          <NIRACard style={styles.card}>
+            <Text style={styles.sectionTitle}>
               Recipient
             </Text>
 
@@ -635,14 +491,12 @@ export default function WhatsAppScreen({
             <TextInput
               style={[
                 styles.input,
-                recipientError &&
-                  styles.inputError,
+                recipientError && styles.inputError,
               ]}
               value={recipient}
-              onChangeText={
-                handleRecipientChange
-              }
+              onChangeText={handleRecipientChange}
               placeholder="+91 9876543210"
+              placeholderTextColor={COLORS.textSecondary}
               keyboardType="phone-pad"
               editable={!loading}
               autoCapitalize="none"
@@ -655,37 +509,28 @@ export default function WhatsAppScreen({
 
             {recipientError ? (
               <Text
-                style={
-                  styles.fieldErrorText
-                }
+                style={styles.fieldErrorText}
                 accessibilityRole="alert"
               >
                 {recipientError}
               </Text>
             ) : null}
 
-            <Text
-              style={styles.helperText}
-            >
-              Enter the WhatsApp recipient's
-              phone number, including the
-              country code.
+            <Text style={styles.helperText}>
+              Enter the WhatsApp recipient's phone number,
+              including the country code.
             </Text>
-          </View>
+          </NIRACard>
 
-          <View style={styles.card}>
-            <View
-              style={styles.messageHeader}
-            >
-              <Text
-                style={styles.sectionTitle}
-              >
+          {/* Message */}
+
+          <NIRACard style={styles.card}>
+            <View style={styles.messageHeader}>
+              <Text style={styles.sectionTitle}>
                 Message
               </Text>
 
-              <Text
-                style={styles.characterCounter}
-              >
+              <Text style={styles.characterCounter}>
                 {messageText.length}/2000
               </Text>
             </View>
@@ -693,15 +538,12 @@ export default function WhatsAppScreen({
             <TextInput
               style={[
                 styles.messageInput,
-                messageError &&
-                  styles.messageInputError,
+                messageError && styles.messageInputError,
               ]}
               value={messageText}
-              onChangeText={
-                handleMessageChange
-              }
+              onChangeText={handleMessageChange}
               placeholder="Type your WhatsApp message..."
-              placeholderTextColor="#9ca3af"
+              placeholderTextColor={COLORS.textSecondary}
               multiline
               maxLength={2000}
               editable={!loading}
@@ -715,211 +557,128 @@ export default function WhatsAppScreen({
 
             {messageError ? (
               <Text
-                style={
-                  styles.fieldErrorText
-                }
+                style={styles.fieldErrorText}
                 accessibilityRole="alert"
               >
                 {messageError}
               </Text>
             ) : (
-              <Text
-                style={
-                  styles.messageHelperText
-                }
-              >
-                Write the message you want to
-                send or use as context for an
-                AI-generated reply.
+              <Text style={styles.helperText}>
+                Write the message you want to send or use
+                as context for an AI-generated reply.
               </Text>
             )}
-          </View>
+          </NIRACard>
 
-          <View style={styles.card}>
-            <Text
-              style={styles.sectionTitle}
-            >
+          {/* Reply language */}
+
+          <NIRACard style={styles.card}>
+            <Text style={styles.sectionTitle}>
               Reply Language
             </Text>
 
-            <View
-              style={
-                styles.languageContainer
-              }
-              accessible
-              accessibilityLabel={`AI response language: ${activeLanguage}`}
-            >
-              <View
-                style={
-                  styles.languageInfo
-                }
-              >
-                <Text
-                  style={
-                    styles.languageLabel
-                  }
-                >
-                  AI response language
-                </Text>
+            <View style={styles.languageContainer}>
+              <Text style={styles.languageLabel}>
+                AI response language
+              </Text>
 
-                <Text
-                  style={
-                    styles.languageValue
-                  }
-                >
-                  {activeLanguage}
-                </Text>
-              </View>
+              <NIRABadge
+                label={activeLanguage.toUpperCase()}
+                color={COLORS.primary}
+              />
             </View>
 
-            <Text
-              style={
-                styles.languageDescription
-              }
-            >
-              AI-generated replies will use your
-              selected communication language.
-              Change your preferred language from
-              your profile settings.
+            <Text style={styles.languageDescription}>
+              AI-generated replies will use your selected
+              communication language. Change your preferred
+              language from your profile settings.
             </Text>
-          </View>
+          </NIRACard>
 
-          <View style={styles.card}>
-            <View
-              style={styles.messageHeader}
-            >
-              <Text
-                style={styles.sectionTitle}
-              >
+          {/* AI suggestion */}
+
+          <NIRACard style={styles.card}>
+            <View style={styles.messageHeader}>
+              <Text style={styles.sectionTitle}>
                 AI Suggested Reply
               </Text>
 
-              <Text
-                style={styles.languageBadge}
-              >
-                {activeLanguage}
-              </Text>
+              <NIRABadge
+                label={activeLanguage.toUpperCase()}
+                color={COLORS.accent}
+              />
             </View>
 
             {renderSuggestionState()}
 
-            <Text
-              style={styles.languageHint}
-            >
+            <Text style={styles.languageHint}>
               Generated in {activeLanguage}
             </Text>
-          </View>
+          </NIRACard>
 
-          <Pressable
-            style={[
-              styles.primaryButton,
-              loading &&
-                styles.primaryButtonDisabled,
-            ]}
+          {/* Generate button */}
+
+          <NIRAButton
+            title="Generate AI Reply"
+            onPress={handleGenerateSuggestion}
             disabled={loading}
-            onPress={
-              handleGenerateSuggestion
-            }
-            accessibilityRole="button"
-            accessibilityLabel={
-              loading
-                ? 'Generating AI reply'
-                : 'Generate AI reply'
-            }
+            loading={loading}
+            style={styles.generateButton}
             accessibilityHint="Generates an AI suggested response using your message"
             accessibilityState={{
               disabled: loading,
               busy: loading,
             }}
-          >
-            {loading ? (
-              <View
-                style={
-                  styles.loadingContent
-                }
-              >
-                <ActivityIndicator
-                  size="small"
-                  color="#ffffff"
-                />
+          />
 
-                <Text
-                  style={[
-                    styles.primaryButtonText,
-                    styles.loadingText,
-                  ]}
-                >
-                  Generating...
-                </Text>
-              </View>
-            ) : (
-              <Text
-                style={
-                  styles.primaryButtonText
-                }
-              >
-                Generate AI Reply
-              </Text>
-            )}
-          </Pressable>
-
-          <Text
-            style={styles.disclaimerText}
-          >
+          <Text style={styles.disclaimerText}>
             This step generates an AI suggestion.
             WhatsApp sending is not connected yet.
           </Text>
+
         </View>
       </ScrollView>
     </KeyboardAvoidingView>
   );
 }
 
+// --------------------------------
+// Styles
+// --------------------------------
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: COLORS.background,
   },
 
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    backgroundColor: '#ffffff',
+    paddingHorizontal: SPACING.lg,
+    paddingVertical: SPACING.md,
+    backgroundColor: COLORS.surface,
     borderBottomWidth: 1,
-    borderBottomColor: '#dddddd',
+    borderBottomColor: COLORS.border,
   },
 
   backButton: {
     minWidth: 48,
     minHeight: 48,
-    paddingVertical: 10,
-    paddingHorizontal: 8,
+    paddingVertical: SPACING.sm,
+    paddingHorizontal: SPACING.sm,
     justifyContent: 'center',
     alignItems: 'flex-start',
   },
 
   backButtonText: {
-    fontSize: 16,
+    fontSize: TYPOGRAPHY.body,
     fontWeight: '600',
-    color: '#111827',
+    color: COLORS.primary,
   },
 
   headerContent: {
     flex: 1,
-  },
-
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#111827',
-  },
-
-  headerSubtitle: {
-    marginTop: 3,
-    fontSize: 12,
-    color: '#6b7280',
   },
 
   scrollView: {
@@ -927,60 +686,57 @@ const styles = StyleSheet.create({
   },
 
   scrollContent: {
-    paddingBottom: 32,
+    paddingBottom: SPACING.xxxl,
   },
 
   content: {
-    padding: 16,
+    padding: SPACING.lg,
   },
 
   card: {
-    backgroundColor: '#ffffff',
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 14,
+    marginBottom: SPACING.md,
   },
 
   sectionTitle: {
-    fontSize: 17,
+    fontSize: TYPOGRAPHY.subtitle,
     fontWeight: '700',
-    color: '#111827',
-    marginBottom: 14,
+    color: COLORS.text,
+    marginBottom: SPACING.md,
   },
 
   label: {
-    fontSize: 14,
+    fontSize: TYPOGRAPHY.small,
     fontWeight: '600',
-    color: '#374151',
-    marginBottom: 8,
+    color: COLORS.text,
+    marginBottom: SPACING.sm,
   },
 
   input: {
     minHeight: 50,
     borderWidth: 1,
-    borderColor: '#d1d5db',
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    fontSize: 16,
-    backgroundColor: '#ffffff',
-    color: '#111827',
+    borderColor: COLORS.border,
+    borderRadius: RADIUS.md,
+    paddingHorizontal: SPACING.md,
+    fontSize: TYPOGRAPHY.body,
+    backgroundColor: COLORS.surface,
+    color: COLORS.text,
   },
 
   inputError: {
-    borderColor: '#dc2626',
+    borderColor: COLORS.error,
   },
 
   fieldErrorText: {
-    marginTop: 6,
-    fontSize: 12,
-    color: '#dc2626',
+    marginTop: SPACING.sm,
+    fontSize: TYPOGRAPHY.caption,
+    color: COLORS.error,
   },
 
   helperText: {
     marginTop: 7,
-    fontSize: 12,
+    fontSize: TYPOGRAPHY.caption,
     lineHeight: 18,
-    color: '#6b7280',
+    color: COLORS.textSecondary,
   },
 
   messageHeader: {
@@ -993,230 +749,101 @@ const styles = StyleSheet.create({
     minHeight: 130,
     maxHeight: 220,
     borderWidth: 1,
-    borderColor: '#d1d5db',
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingTop: 12,
-    paddingBottom: 12,
-    fontSize: 16,
+    borderColor: COLORS.border,
+    borderRadius: RADIUS.md,
+    paddingHorizontal: SPACING.md,
+    paddingTop: SPACING.md,
+    paddingBottom: SPACING.md,
+    fontSize: TYPOGRAPHY.body,
     lineHeight: 22,
-    backgroundColor: '#ffffff',
-    color: '#111827',
+    backgroundColor: COLORS.surface,
+    color: COLORS.text,
   },
 
   messageInputError: {
-    borderColor: '#dc2626',
+    borderColor: COLORS.error,
   },
 
   characterCounter: {
     marginBottom: 14,
     fontSize: 12,
-    color: '#6b7280',
-  },
-
-  messageHelperText: {
-    marginTop: 7,
-    fontSize: 12,
-    lineHeight: 18,
-    color: '#6b7280',
+    color: COLORS.textSecondary,
   },
 
   languageContainer: {
-    borderWidth: 1,
-    borderColor: '#dbeafe',
-    borderRadius: 12,
-    backgroundColor: '#eff6ff',
-    padding: 14,
-  },
-
-  languageInfo: {
     flexDirection: 'row',
-    alignItems: 'center',
     justifyContent: 'space-between',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderRadius: RADIUS.md,
+    backgroundColor: COLORS.background,
+    padding: SPACING.md,
   },
 
   languageLabel: {
-    fontSize: 14,
-    color: '#374151',
+    fontSize: TYPOGRAPHY.small,
+    color: COLORS.text,
     fontWeight: '600',
-  },
-
-  languageValue: {
-    fontSize: 15,
-    color: '#2563eb',
-    fontWeight: '700',
-    textTransform: 'uppercase',
   },
 
   languageDescription: {
     marginTop: 9,
-    fontSize: 12,
+    fontSize: TYPOGRAPHY.caption,
     lineHeight: 18,
-    color: '#6b7280',
+    color: COLORS.textSecondary,
   },
 
-  languageBadge: {
-    marginBottom: 14,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 8,
-    backgroundColor: '#eff6ff',
-    color: '#2563eb',
-    fontSize: 11,
-    fontWeight: '700',
-    textTransform: 'uppercase',
-  },
-
-  suggestionLoading: {
-    minHeight: 70,
-    flexDirection: 'row',
-    alignItems: 'center',
+  loadingContainer: {
+    minHeight: 90,
     justifyContent: 'center',
-  },
-
-  loadingSuggestionText: {
-    marginLeft: 8,
-    fontSize: 14,
-    color: '#374151',
-  },
-
-  streamingContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 10,
-  },
-
-  streamingText: {
-    marginLeft: 7,
-    fontSize: 12,
-    color: '#2563eb',
   },
 
   suggestionContainer: {
     minHeight: 90,
     borderWidth: 1,
-    borderColor: '#dbeafe',
-    borderRadius: 12,
-    padding: 14,
-    backgroundColor: '#eff6ff',
+    borderColor: COLORS.border,
+    borderRadius: RADIUS.md,
+    padding: SPACING.md,
+    backgroundColor: COLORS.background,
   },
 
   suggestionText: {
-    fontSize: 15,
+    fontSize: TYPOGRAPHY.body,
     lineHeight: 23,
-    color: '#111827',
-  },
-
-  emptySuggestionContainer: {
-    minHeight: 90,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 10,
-  },
-
-  emptySuggestionTitle: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#374151',
-    marginBottom: 6,
-  },
-
-  emptySuggestion: {
-    textAlign: 'center',
-    color: '#6b7280',
-    fontSize: 13,
-    lineHeight: 19,
-  },
-
-  generationErrorContainer: {
-    minHeight: 90,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 10,
-  },
-
-  generationErrorTitle: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#b00020',
-    marginBottom: 6,
-  },
-
-  generationErrorText: {
-    textAlign: 'center',
-    color: '#6b7280',
-    fontSize: 13,
-    lineHeight: 19,
-  },
-
-  languageHint: {
-    marginTop: 12,
-    fontSize: 12,
-    color: '#6b7280',
+    color: COLORS.text,
   },
 
   actionRow: {
     flexDirection: 'row',
-    marginTop: 12,
+    marginTop: SPACING.md,
+    gap: SPACING.sm,
   },
 
-  secondaryButton: {
+  actionButton: {
     flex: 1,
-    minHeight: 48,
-    borderWidth: 1,
-    borderColor: '#d1d5db',
-    borderRadius: 10,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 10,
-    marginRight: 8,
-    backgroundColor: '#ffffff',
   },
 
-  secondaryButtonText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#111827',
+  languageHint: {
+    marginTop: SPACING.md,
+    fontSize: TYPOGRAPHY.caption,
+    color: COLORS.textSecondary,
   },
 
-  primaryButton: {
-    minHeight: 52,
-    borderRadius: 12,
-    backgroundColor: '#2563eb',
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-  },
-
-  primaryButtonDisabled: {
-    opacity: 0.5,
-  },
-
-  primaryButtonText: {
-    color: '#ffffff',
-    fontSize: 15,
-    fontWeight: '700',
-  },
-
-  loadingContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-
-  loadingText: {
-    marginLeft: 8,
+  generateButton: {
+    marginTop: SPACING.sm,
   },
 
   errorContainer: {
-    padding: 12,
-    backgroundColor: '#ffecec',
+    padding: SPACING.md,
+    backgroundColor: '#FDECEC',
     borderBottomWidth: 1,
-    borderBottomColor: '#ffcccc',
+    borderBottomColor: '#F5C6C6',
   },
 
   errorText: {
-    color: '#b00020',
-    fontSize: 13,
+    color: COLORS.error,
+    fontSize: TYPOGRAPHY.small,
   },
 
   disclaimerText: {
@@ -1225,6 +852,6 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     fontSize: 11,
     lineHeight: 16,
-    color: '#6b7280',
+    color: COLORS.textSecondary,
   },
 });

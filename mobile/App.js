@@ -14,6 +14,13 @@ import {
   useState,
 } from 'react';
 
+import {
+  COLORS,
+  SPACING,
+  RADIUS,
+  TYPOGRAPHY,
+} from './src/theme';
+
 import { login } from './src/auth';
 
 import HomeScreen from './src/HomeScreen';
@@ -202,7 +209,7 @@ export default function App() {
       />
 
       <Text style={styles.title}>
-        AI Communication Assistant
+        NIRA AI
       </Text>
 
       <Text style={styles.subtitle}>
@@ -217,10 +224,13 @@ export default function App() {
         <TextInput
           style={styles.input}
           placeholder="Enter username"
+          placeholderTextColor={COLORS.textSecondary}
           value={username}
           onChangeText={setUsername}
           autoCapitalize="none"
+          autoCorrect={false}
           editable={!loading}
+          accessibilityLabel="Username"
         />
 
         <Text style={styles.label}>
@@ -230,10 +240,12 @@ export default function App() {
         <TextInput
           style={styles.input}
           placeholder="Enter password"
+          placeholderTextColor={COLORS.textSecondary}
           value={password}
           onChangeText={setPassword}
           secureTextEntry
           editable={!loading}
+          accessibilityLabel="Password"
         />
 
         <Pressable
@@ -268,7 +280,7 @@ export default function App() {
 const styles = StyleSheet.create({
   authenticatedContainer: {
     flex: 1,
-    backgroundColor: '#f5f7fb',
+    backgroundColor: COLORS.background,
   },
 
   homeContainer: {
@@ -277,53 +289,60 @@ const styles = StyleSheet.create({
 
   container: {
     flex: 1,
-    backgroundColor: '#f5f7fb',
-    paddingHorizontal: 24,
+    backgroundColor: COLORS.background,
+    paddingHorizontal: SPACING.xl,
     paddingTop: 60,
+    justifyContent: 'center',
   },
 
   title: {
-    fontSize: 27,
-    fontWeight: '700',
-    color: '#111827',
-    marginBottom: 8,
+    fontSize: TYPOGRAPHY.display,
+    fontWeight: '800',
+    color: COLORS.primary,
+    marginBottom: SPACING.sm,
   },
 
   subtitle: {
-    fontSize: 16,
-    color: '#6b7280',
-    marginBottom: 32,
+    fontSize: TYPOGRAPHY.body,
+    color: COLORS.textSecondary,
+    marginBottom: SPACING.xxl + SPACING.sm,
   },
 
   card: {
-    backgroundColor: '#ffffff',
-    borderRadius: 20,
-    padding: 24,
+    backgroundColor: COLORS.surface,
+    borderRadius: RADIUS.xl,
+    padding: SPACING.xl,
+    borderWidth: 1,
+    borderColor: COLORS.border,
   },
 
   label: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#374151',
-    marginBottom: 8,
+    fontSize: TYPOGRAPHY.small,
+    fontWeight: '700',
+    color: COLORS.text,
+    marginBottom: SPACING.sm,
   },
 
   input: {
-    height: 52,
+    minHeight: 52,
     borderWidth: 1,
-    borderColor: '#d1d5db',
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    fontSize: 16,
-    marginBottom: 20,
-    backgroundColor: '#ffffff',
+    borderColor: COLORS.border,
+    borderRadius: RADIUS.md,
+    paddingHorizontal: SPACING.lg,
+    fontSize: TYPOGRAPHY.body,
+    marginBottom: SPACING.xl,
+    backgroundColor: COLORS.background,
+    color: COLORS.text,
   },
 
   button: {
-    backgroundColor: '#111827',
-    borderRadius: 12,
-    paddingVertical: 16,
-    marginTop: 4,
+    backgroundColor: COLORS.primary,
+    borderRadius: RADIUS.md,
+    minHeight: 54,
+    paddingVertical: SPACING.lg,
+    marginTop: SPACING.xs,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 
   buttonDisabled: {
@@ -331,9 +350,10 @@ const styles = StyleSheet.create({
   },
 
   buttonText: {
-    color: '#ffffff',
-    fontSize: 16,
-    fontWeight: '600',
+    color: COLORS.white,
+    fontSize: TYPOGRAPHY.body,
+    fontWeight: '700',
     textAlign: 'center',
   },
 });
+

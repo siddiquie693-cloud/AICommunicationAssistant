@@ -12,6 +12,13 @@ import {
   View,
 } from 'react-native';
 
+import {
+  COLORS,
+  SPACING,
+  RADIUS,
+  TYPOGRAPHY,
+} from './theme';
+
 import * as Clipboard from 'expo-clipboard';
 
 import NotificationBanner from './NotificationBanner';
@@ -489,17 +496,17 @@ const PhoneCallScreen = ({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: COLORS.background,
   },
 
   header: {
     minHeight: 60,
-    paddingHorizontal: 16,
+    paddingHorizontal: SPACING.lg,
     flexDirection: 'row',
     alignItems: 'center',
     borderBottomWidth: 1,
-    borderBottomColor: '#ddd',
-    backgroundColor: '#fff',
+    borderBottomColor: COLORS.border,
+    backgroundColor: COLORS.surface,
   },
 
   backButton: {
@@ -507,17 +514,19 @@ const styles = StyleSheet.create({
     height: 44,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 8,
+    marginRight: SPACING.sm,
   },
 
   backButtonText: {
-    fontSize: 28,
+    fontSize: TYPOGRAPHY.heading,
+    color: COLORS.primary,
   },
 
   headerTitle: {
     flex: 1,
-    fontSize: 20,
+    fontSize: TYPOGRAPHY.subtitle,
     fontWeight: '700',
+    color: COLORS.text,
   },
 
   scrollView: {
@@ -525,202 +534,213 @@ const styles = StyleSheet.create({
   },
 
   scrollContent: {
-    padding: 16,
-    paddingBottom: 32,
+    padding: SPACING.lg,
+    paddingBottom: SPACING.xxxl,
   },
 
   card: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 16,
+    backgroundColor: COLORS.surface,
+    borderRadius: RADIUS.lg,
+    padding: SPACING.lg,
+    marginBottom: SPACING.lg,
     borderWidth: 1,
-    borderColor: '#e2e2e2',
+    borderColor: COLORS.border,
   },
 
   label: {
-    fontSize: 14,
+    fontSize: TYPOGRAPHY.small,
     fontWeight: '700',
-    marginBottom: 8,
+    color: COLORS.text,
+    marginBottom: SPACING.sm,
   },
 
   input: {
-    minHeight: 46,
+    minHeight: 48,
     borderWidth: 1,
-    borderColor: '#ccc',
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    fontSize: 16,
-    backgroundColor: '#fff',
+    borderColor: COLORS.border,
+    borderRadius: RADIUS.md,
+    paddingHorizontal: SPACING.md,
+    fontSize: TYPOGRAPHY.body,
+    backgroundColor: COLORS.surface,
+    color: COLORS.text,
   },
 
   inputError: {
-    borderColor: '#d93025',
+    borderColor: COLORS.error,
   },
 
   errorText: {
-    marginTop: 8,
-    fontSize: 13,
+    marginTop: SPACING.sm,
+    fontSize: TYPOGRAPHY.small,
     lineHeight: 18,
-    color: '#d93025',
+    color: COLORS.error,
   },
 
   languageBox: {
     borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 8,
-    padding: 12,
-    backgroundColor: '#fafafa',
+    borderColor: COLORS.border,
+    borderRadius: RADIUS.md,
+    padding: SPACING.md,
+    backgroundColor: '#EFF6FF',
   },
 
   languageLabel: {
-    fontSize: 12,
+    fontSize: TYPOGRAPHY.caption,
     fontWeight: '600',
-    marginBottom: 4,
+    marginBottom: SPACING.xs,
+    color: COLORS.textSecondary,
   },
 
   languageText: {
-    fontSize: 16,
+    fontSize: TYPOGRAPHY.body,
     fontWeight: '600',
+    color: COLORS.primary,
   },
 
   helperText: {
-    marginTop: 8,
-    fontSize: 13,
+    marginTop: SPACING.sm,
+    fontSize: TYPOGRAPHY.caption,
     lineHeight: 18,
-    color: '#666',
+    color: COLORS.textSecondary,
   },
 
   statusRow: {
     minHeight: 40,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: SPACING.sm,
   },
 
   statusText: {
-    fontSize: 15,
+    fontSize: TYPOGRAPHY.small,
     fontWeight: '600',
+    color: COLORS.text,
   },
 
   startCallButton: {
-    minHeight: 46,
-    borderRadius: 8,
+    minHeight: 48,
+    borderRadius: RADIUS.md,
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 12,
-    backgroundColor: '#111',
+    marginTop: SPACING.md,
+    backgroundColor: COLORS.primary,
   },
 
   startCallButtonText: {
-    color: '#fff',
-    fontSize: 15,
+    color: COLORS.white,
+    fontSize: TYPOGRAPHY.body,
     fontWeight: '700',
   },
 
   disabledButton: {
-    opacity: 0.6,
+    opacity: 0.5,
   },
 
   errorCard: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 16,
+    backgroundColor: COLORS.surface,
+    borderRadius: RADIUS.lg,
+    padding: SPACING.lg,
+    marginBottom: SPACING.lg,
     borderWidth: 1,
-    borderColor: '#f0c8c8',
+    borderColor: '#F5C6C6',
   },
 
   sectionTitle: {
-    fontSize: 17,
+    fontSize: TYPOGRAPHY.subtitle,
     fontWeight: '700',
-    marginBottom: 12,
+    marginBottom: SPACING.md,
+    color: COLORS.text,
   },
 
   suggestionBox: {
     minHeight: 100,
     borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 8,
-    padding: 12,
-    backgroundColor: '#fafafa',
+    borderColor: COLORS.border,
+    borderRadius: RADIUS.md,
+    padding: SPACING.md,
+    backgroundColor: '#EFF6FF',
   },
 
   suggestionText: {
-    fontSize: 15,
+    fontSize: TYPOGRAPHY.small,
     lineHeight: 22,
+    color: COLORS.text,
   },
 
   emptyState: {
     minHeight: 100,
     alignItems: 'center',
     justifyContent: 'center',
-    padding: 12,
+    padding: SPACING.md,
   },
 
   emptyStateText: {
     textAlign: 'center',
-    fontSize: 14,
+    fontSize: TYPOGRAPHY.small,
     lineHeight: 20,
-    color: '#777',
+    color: COLORS.textSecondary,
   },
 
   actionRow: {
     flexDirection: 'row',
-    gap: 10,
-    marginTop: 12,
+    gap: SPACING.sm,
+    marginTop: SPACING.md,
   },
 
   actionButton: {
     flex: 1,
-    minHeight: 44,
+    minHeight: 48,
     borderWidth: 1,
-    borderColor: '#ccc',
-    borderRadius: 8,
+    borderColor: COLORS.primary,
+    borderRadius: RADIUS.md,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 10,
+    paddingHorizontal: SPACING.sm,
+    backgroundColor: COLORS.surface,
   },
 
   actionButtonText: {
-    fontSize: 14,
+    fontSize: TYPOGRAPHY.small,
     fontWeight: '600',
+    color: COLORS.primary,
   },
 
   comingSoonCard: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 16,
+    backgroundColor: COLORS.surface,
+    borderRadius: RADIUS.lg,
+    padding: SPACING.lg,
+    marginBottom: SPACING.lg,
     borderWidth: 1,
-    borderColor: '#e2e2e2',
+    borderColor: COLORS.border,
   },
 
   comingSoonTitle: {
-    fontSize: 16,
+    fontSize: TYPOGRAPHY.body,
     fontWeight: '700',
-    marginBottom: 6,
+    marginBottom: SPACING.sm,
+    color: COLORS.primary,
   },
 
   comingSoonText: {
-    fontSize: 13,
+    fontSize: TYPOGRAPHY.caption,
     lineHeight: 19,
-    color: '#666',
+    color: COLORS.textSecondary,
   },
 
   backBottomButton: {
-    minHeight: 46,
-    borderRadius: 8,
+    minHeight: 48,
+    borderRadius: RADIUS.md,
     borderWidth: 1,
-    borderColor: '#ccc',
+    borderColor: COLORS.primary,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#fff',
+    backgroundColor: COLORS.surface,
   },
 
   backBottomButtonText: {
-    fontSize: 15,
+    fontSize: TYPOGRAPHY.small,
     fontWeight: '600',
+    color: COLORS.primary,
   },
 });
 

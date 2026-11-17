@@ -40,6 +40,17 @@ import {
   getAccessToken,
   getRefreshToken,
 } from './storage';
+import NIRAHeader from './components/NIRAHeader';
+import NIRACard from './components/NIRACard';
+import NIRAButton from './components/NIRAButton';
+import NIRAScreen from './NIRAScreen';
+
+import {
+  COLORS,
+  SPACING,
+  RADIUS,
+  TYPOGRAPHY,
+} from './theme';
 
 export default function HomeScreen({ 
   onLogout,
@@ -1066,8 +1077,12 @@ export default function HomeScreen({
   }
 
   return (
-    <ScrollView
-      style={styles.scrollView}
+    <NIRAScreen
+      scrollable
+      style={[
+        styles.scrollView,
+        { backgroundColor: COLORS.background },
+      ]}
       contentContainerStyle={[
         styles.container,
         {
@@ -1096,16 +1111,14 @@ export default function HomeScreen({
         />
       }
     >
-      <Text style={styles.title}>
-        AI Communication Assistant
-      </Text>
-
-      <Text style={styles.subtitle}>
-        Welcome back!
-      </Text>
+      <NIRAHeader
+        title="NIRA AI"
+        subtitle="Your personal AI assistant"
+        onBack={undefined}
+      />
 
       {/* PROFILE CARD */}
-      <View style={styles.card}>
+      <NIRACard style={styles.card}>
         <View style={styles.profileHeader}>
           <Text style={styles.cardTitle}>
             Your profile
@@ -1496,7 +1509,7 @@ export default function HomeScreen({
             </View>
           </>
         )}
-      </View>
+      </NIRACard>
 
       {/* WHATSAPP ASSISTANT */}
       <View style={styles.card}>
@@ -1510,29 +1523,23 @@ export default function HomeScreen({
           language.
         </Text>
 
-        <Pressable
-          style={styles.whatsappButton}
+        <NIRAButton
+          title="Open WhatsApp Assistant"
           onPress={handleOpenWhatsApp}
-          accessibilityRole="button"
-          accessibilityLabel="Open WhatsApp Assistant"
           accessibilityHint="Opens the AI-assisted WhatsApp message screen"
-        >
-          <Text
-            style={
-              styles.whatsappButtonText
-            }
-          >
-            Open WhatsApp Assistant
+          style={styles.whatsappButton}
+        />
+          <Text style={styles.communicationHint}>
+            WhatsApp sending is not connected yet.
           </Text>
-        </Pressable>
-
+        
         <Text style={styles.communicationHint}>
           WhatsApp sending is not connected yet.
         </Text>
       </View>
 
-      <View style={styles.communicationCard}>
-        <Text style={styles.communicationTitle}>
+      <View style={styles.card}>
+        <Text style={styles.cardTitle}>
           Phone Call Assistant
         </Text>
 
@@ -1541,18 +1548,16 @@ export default function HomeScreen({
           phone conversations.
         </Text>
 
-        <TouchableOpacity
-          style={styles.phoneCallButton}
+        <NIRAButton
+          title="Open Phone Call Assistant"
           onPress={handleOpenPhoneCall}
-          accessibilityRole="button"
-          accessibilityLabel="Open Phone Call Assistant"
           accessibilityHint="Opens the AI-assisted phone call screen"
-        >
-          <Text style={styles.phoneCallButtonText}>
-            Open Phone Call Assistant
+          style={styles.phoneCallButton}
+        />
+          <Text style={styles.communicationHint}>
+            Phone calling is not connected yet.
           </Text>
-        </TouchableOpacity>
-
+      
         <Text style={styles.communicationHint}>
           Phone calling is not connected yet.
         </Text>
@@ -1579,40 +1584,17 @@ export default function HomeScreen({
           }
         />
 
-        <Pressable
-          style={[
-            styles.createButton,
-            creatingConversation &&
-              styles.buttonDisabled,
-          ]}
-          accessibilityRole="button"
-            accessibilityLabel={
-              creatingConversation
-                ? 'Creating conversation'
-                : 'Create new conversation'
-            }
-            accessibilityHint="Creates a new conversation"
-            accessibilityState={{
-              disabled: creatingConversation,
-              busy: creatingConversation,
-            }}
-          onPress={
-            handleCreateConversation
-          }
-          disabled={
+        <NIRAButton
+          title={
             creatingConversation
-          }
-        >
-          <Text
-            style={
-              styles.createButtonText
-            }
-          >
-            {creatingConversation
               ? 'Creating...'
-              : 'New Conversation'}
-          </Text>
-        </Pressable>
+              : 'New Conversation'
+          }
+          onPress={handleCreateConversation}
+          disabled={creatingConversation}
+          accessibilityHint="Creates a new conversation"
+          style={styles.createButton}
+        />
       </View>
 
       {/* NIRA PERSONAL PROFILE */}
@@ -1626,17 +1608,12 @@ export default function HomeScreen({
           instructions, privacy, and AI memory controls.
         </Text>
 
-        <Pressable
-          style={styles.niraProfileButton}
+        <NIRAButton
+          title="Open NIRA Profile"
           onPress={onOpenNIRAPersonalProfile}
-          accessibilityRole="button"
-          accessibilityLabel="Open NIRA Personal Profile"
           accessibilityHint="Opens your NIRA personal profile"
-        >
-          <Text style={styles.niraProfileButtonText}>
-            Open NIRA Profile
-          </Text>
-        </Pressable>
+          style={styles.niraProfileButton}
+        />
       </View>
 
       {/* CONVERSATIONS */}
@@ -1901,22 +1878,13 @@ export default function HomeScreen({
         </View>
       ) : null}
 
-      <Pressable
-        style={styles.logoutButton}
+      <NIRAButton
+        title="Sign Out"
         onPress={handleLogout}
-        accessibilityRole="button"
-        accessibilityLabel="Sign out"
         accessibilityHint="Sign out of the current account"
-      >
-        <Text
-          style={
-            styles.logoutButtonText
-          }
-        >
-          Sign Out
-        </Text>
-      </Pressable>
-    </ScrollView>
+        style={styles.logoutButton}
+      />
+    </NIRAScreen>
   );
 }
 
@@ -1928,8 +1896,8 @@ const styles = StyleSheet.create({
 
   container: {
     paddingHorizontal: 24,
-    paddingTop: 90,
-    paddingBottom: 40,
+    paddingTop: SPACING.xl,
+    paddingBottom: SPACING.xxxl,
   },
 
   center: {
@@ -1941,188 +1909,206 @@ const styles = StyleSheet.create({
   },
 
   title: {
-    fontSize: 27,
+    fontSize: TYPOGRAPHY.heading,
     fontWeight: '700',
-    color: '#111827',
-    marginBottom: 8,
+    color: COLORS.primaryDark,
+    marginBottom: SPACING.xs,
   },
 
   subtitle: {
-    fontSize: 16,
-    color: '#6b7280',
-    marginBottom: 32,
+    fontSize: TYPOGRAPHY.small,
+    color: COLORS.textSecondary,
+    marginBottom: SPACING.lg,
   },
 
   card: {
-    backgroundColor: '#ffffff',
-    borderRadius: 20,
-    padding: 24,
-    marginBottom: 16,
+    backgroundColor: COLORS.surface,
+    borderColor: COLORS.border,
+    borderWidth: 1,
+    borderRadius: RADIUS.lg,
+    padding: SPACING.xl,
+    marginBottom: SPACING.lg,
+
+    elevation: 2,
+    shadowColor: COLORS.black,
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
   },
 
   cardTitle: {
-    fontSize: 18,
+    fontSize: TYPOGRAPHY.title,
     fontWeight: '700',
-    color: '#111827',
-    marginBottom: 16,
+    color: COLORS.primaryDark,
+    marginBottom: SPACING.sm,
   },
-
+  
   profileHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    marginBottom: SPACING.md,
   },
 
   editProfileButton: {
-    minHeight: 44,
+    backgroundColor: COLORS.background,
     borderWidth: 1,
-    borderColor: '#111827',
-    borderRadius: 10,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    marginBottom: 16,
-    justifyContent: 'center',
+    borderColor: COLORS.border,
+    borderRadius: RADIUS.pill,
+    paddingVertical: SPACING.sm,
+    paddingHorizontal: SPACING.lg,
   },
 
   editProfileButtonText: {
-    color: '#111827',
-    fontSize: 14,
-    fontWeight: '600',
+    color: COLORS.primary,
+    fontSize: TYPOGRAPHY.small,
+    fontWeight: '700',
   },
 
   cardText: {
-    fontSize: 15,
-    color: '#374151',
-    marginBottom: 8,
+    color: COLORS.text,
+    fontSize: TYPOGRAPHY.body,
+    lineHeight: 24,
+    marginBottom: SPACING.sm,
   },
 
   niraProfileButton: {
-    marginTop: 16,
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    borderRadius: 8,
-    backgroundColor: '#222',
+    backgroundColor: COLORS.primary,
+    borderRadius: RADIUS.md,
+    paddingVertical: SPACING.lg,
     alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: SPACING.md,
   },
 
   niraProfileButtonText: {
-    color: '#fff',
-    fontSize: 15,
-    fontWeight: '600',
+    color: COLORS.white,
+    fontSize: TYPOGRAPHY.body,
+    fontWeight: '700',
   },
 
   formLabel: {
-    fontSize: 14,
+    fontSize: TYPOGRAPHY.small,
     fontWeight: '600',
-    color: '#374151',
-    marginBottom: 7,
+    color: COLORS.text,
+    marginBottom: SPACING.sm,
   },
 
-  profileInput: {
-    height: 50,
-    borderWidth: 1,
-    borderColor: '#d1d5db',
-    borderRadius: 12,
-    paddingHorizontal: 15,
-    fontSize: 16,
-    backgroundColor: '#ffffff',
-    marginBottom: 6,
-  },
+ profileInput: {
+  backgroundColor: COLORS.background,
+  borderWidth: 1,
+  borderColor: COLORS.border,
+  borderRadius: RADIUS.md,
+  paddingHorizontal: SPACING.lg,
+  paddingVertical: SPACING.md,
+  fontSize: TYPOGRAPHY.body,
+  color: COLORS.text,
+  marginBottom: SPACING.md,
+},
 
   formHint: {
-    fontSize: 12,
-    color: '#9ca3af',
-    marginBottom: 14,
+    fontSize: TYPOGRAPHY.caption,
+    color: COLORS.textSecondary,
+    marginTop: SPACING.xs,
+    marginBottom: SPACING.md,
   },
 
   languageSelector: {
-    minHeight: 50,
-    borderWidth: 1,
-    borderColor: '#d1d5db',
-    borderRadius: 12,
-    paddingHorizontal: 15,
-    paddingVertical: 12,
-    backgroundColor: '#ffffff',
-    marginBottom: 6,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    backgroundColor: COLORS.background,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderRadius: RADIUS.md,
+    padding: SPACING.lg,
+    marginBottom: SPACING.md,
   },
 
   languageSelectorText: {
+    color: COLORS.text,
+    fontSize: TYPOGRAPHY.body,
     flex: 1,
-    fontSize: 16,
-    color: '#111827',
   },
 
   languageSelectorArrow: {
-    fontSize: 12,
-    color: '#6b7280',
-    marginLeft: 10,
+    color: COLORS.primary,
+    fontSize: TYPOGRAPHY.body,
+    fontWeight: '700',
+    marginLeft: SPACING.md,
   },
 
   languageOptions: {
+    backgroundColor: COLORS.surface,
     borderWidth: 1,
-    borderColor: '#e5e7eb',
-    borderRadius: 12,
-    marginBottom: 14,
+    borderColor: COLORS.border,
+    borderRadius: RADIUS.md,
+    marginBottom: SPACING.md,
     overflow: 'hidden',
   },
 
   languageOption: {
-    minHeight: 48,
-    paddingHorizontal: 15,
-    paddingVertical: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: SPACING.md,
+    paddingHorizontal: SPACING.lg,
     borderBottomWidth: 1,
-    borderBottomColor: '#f3f4f6',
-    justifyContent: 'center',
+    borderBottomColor: COLORS.border,
   },
 
   languageOptionName: {
-    fontSize: 15,
+    color: COLORS.text,
+    fontSize: TYPOGRAPHY.body,
     fontWeight: '600',
-    color: '#111827',
   },
 
   languageOptionNative: {
-    fontSize: 13,
-    color: '#6b7280',
-    marginTop: 3,
+    color: COLORS.textSecondary,
+    fontSize: TYPOGRAPHY.small,
+    marginLeft: SPACING.sm,
   },
 
   profileActions: {
     flexDirection: 'row',
-    gap: 10,
-    marginTop: 10,
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: SPACING.md,
+    marginTop: SPACING.lg,
   },
 
   cancelProfileButton: {
     flex: 1,
+    backgroundColor: COLORS.background,
     borderWidth: 1,
-    borderColor: '#d1d5db',
-    borderRadius: 12,
-    paddingVertical: 15,
+    borderColor: COLORS.border,
+    paddingVertical: SPACING.md,
+    paddingHorizontal: SPACING.xl,
+    borderRadius: RADIUS.md,
     alignItems: 'center',
+    justifyContent: 'center',
   },
 
   cancelProfileButtonText: {
-    color: '#374151',
-    fontSize: 15,
+    color: COLORS.textSecondary,
+    fontSize: TYPOGRAPHY.body,
     fontWeight: '600',
   },
 
   saveProfileButton: {
-    flex: 1,
-    backgroundColor: '#111827',
-    borderRadius: 12,
-    paddingVertical: 15,
+    backgroundColor: COLORS.primary,
+    paddingVertical: SPACING.md,
+    paddingHorizontal: SPACING.xl,
+    borderRadius: RADIUS.md,
     alignItems: 'center',
     justifyContent: 'center',
   },
 
   saveProfileButtonText: {
-    color: '#ffffff',
-    fontSize: 15,
+    color: COLORS.white,
+    fontSize: TYPOGRAPHY.body,
     fontWeight: '600',
   },
 
@@ -2140,48 +2126,53 @@ const styles = StyleSheet.create({
   searchInput: {
     height: 50,
     borderWidth: 1,
-    borderColor: '#d1d5db',
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    fontSize: 16,
-    backgroundColor: '#ffffff',
-    marginBottom: 16,
+    borderColor: COLORS.border,
+    borderRadius: RADIUS.md,
+    paddingHorizontal: SPACING.lg,
+    fontSize: TYPOGRAPHY.body,
+    backgroundColor: COLORS.background,
+    color: COLORS.text,
+    marginBottom: SPACING.lg,
   },
 
   /*
    * WhatsApp Assistant styles.
    */
   communicationDescription: {
-    fontSize: 14,
-    lineHeight: 20,
-    color: '#4b5563',
-    marginBottom: 16,
+    fontSize: TYPOGRAPHY.small,
+    lineHeight: 21,
+    color: COLORS.textSecondary,
+    marginBottom: SPACING.lg,
   },
 
   whatsappButton: {
-    backgroundColor: '#2563eb',
-    borderRadius: 12,
-    paddingVertical: 16,
+    backgroundColor: COLORS.primary,
+    borderRadius: RADIUS.md,
+    paddingVertical: SPACING.lg,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 
   whatsappButtonText: {
-    color: '#ffffff',
-    fontSize: 15,
+    color: COLORS.white,
+    fontSize: TYPOGRAPHY.body,
     fontWeight: '700',
     textAlign: 'center',
   },
 
   phoneCallButton: {
-    minHeight: 44,
-    borderRadius: 8,
+    backgroundColor: COLORS.accent,
+    borderRadius: RADIUS.md,
+    paddingVertical: SPACING.lg,
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 10,
   },
 
   phoneCallButtonText: {
-    fontSize: 15,
-    fontWeight: '600',
+    color: COLORS.white,
+    fontSize: TYPOGRAPHY.body,
+    fontWeight: '700',
+    textAlign: 'center',
   },
 
   communicationHint: {
@@ -2193,90 +2184,100 @@ const styles = StyleSheet.create({
   },
 
   createButton: {
-    backgroundColor: '#111827',
-    borderRadius: 12,
-    paddingVertical: 16,
+    backgroundColor: COLORS.primary,
+    borderRadius: RADIUS.md,
+    paddingVertical: SPACING.lg,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: SPACING.sm,
   },
 
-  createButtonText: {
-    color: '#ffffff',
-    fontSize: 16,
-    fontWeight: '600',
+ createButtonText: {
+    color: COLORS.white,
+    fontSize: TYPOGRAPHY.body,
+    fontWeight: '700',
     textAlign: 'center',
   },
 
   buttonDisabled: {
-    opacity: 0.6,
+    opacity: 0.5,
   },
 
-  tabs: {
+ tabs: {
     flexDirection: 'row',
-    backgroundColor: '#f3f4f6',
-    borderRadius: 12,
-    padding: 4,
-    marginBottom: 16,
+    backgroundColor: COLORS.background,
+    borderRadius: RADIUS.md,
+    padding: SPACING.xs,
+    marginBottom: SPACING.lg,
+    borderWidth: 1,
+    borderColor: COLORS.border,
   },
 
   tab: {
     flex: 1,
-    minHeight: 44,
-    paddingVertical: 10,
-    borderRadius: 9,
+    paddingVertical: SPACING.md,
     alignItems: 'center',
     justifyContent: 'center',
+    borderRadius: RADIUS.sm,
   },
 
   activeTab: {
-    backgroundColor: '#111827',
+    backgroundColor: COLORS.primary,
+    elevation: 2,
   },
 
   tabText: {
-    fontSize: 14,
+    color: COLORS.textSecondary,
+    fontSize: TYPOGRAPHY.small,
     fontWeight: '600',
-    color: '#6b7280',
   },
 
   activeTabText: {
-    color: '#ffffff',
+    color: COLORS.white,
+    fontSize: TYPOGRAPHY.small,
+    fontWeight: '700',
   },
 
   conversationItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    minHeight: 60,
-    borderTopWidth: 1,
-    borderTopColor: '#e5e7eb',
-    paddingVertical: 14,
+    backgroundColor: COLORS.background,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderRadius: RADIUS.md,
+    padding: SPACING.lg,
+    marginBottom: SPACING.md,
   },
 
   conversationContent: {
     flex: 1,
-    paddingRight: 12,
+    justifyContent: 'center',
   },
 
   conversationTitle: {
-    fontSize: 16,
+    fontSize: TYPOGRAPHY.body,
     fontWeight: '600',
-    color: '#111827',
-    marginBottom: 4,
+    color: COLORS.text,
+    marginBottom: SPACING.xs,
   },
 
   conversationDate: {
-    fontSize: 13,
-    color: '#6b7280',
+    fontSize: TYPOGRAPHY.caption,
+    color: COLORS.textSecondary,
+    marginTop: SPACING.xs,
   },
 
   actionHint: {
-    fontSize: 24,
-    color: '#6b7280',
-    paddingHorizontal: 4,
+    fontSize: TYPOGRAPHY.caption,
+    color: COLORS.textSecondary,
+    marginTop: SPACING.xs,
   },
 
   actionHelp: {
-    fontSize: 12,
-    color: '#9ca3af',
-    textAlign: 'center',
-    marginTop: 12,
+    fontSize: TYPOGRAPHY.small,
+    color: COLORS.textSecondary,
+    lineHeight: 20,
+    marginTop: SPACING.sm,
   },
 
   itemDisabled: {
@@ -2285,88 +2286,97 @@ const styles = StyleSheet.create({
 
   listLoading: {
     alignItems: 'center',
-    paddingVertical: 24,
+    justifyContent: 'center',
+    paddingVertical: SPACING.xxl,
   },
 
   listLoadingText: {
-    marginTop: 8,
-    fontSize: 13,
-    color: '#6b7280',
+    color: COLORS.textSecondary,
+    fontSize: TYPOGRAPHY.small,
+    marginTop: SPACING.md,
   },
 
   emptyState: {
     alignItems: 'center',
-    paddingVertical: 28,
-    paddingHorizontal: 12,
+    justifyContent: 'center',
+    paddingVertical: SPACING.xxxl,
+    paddingHorizontal: SPACING.lg,
   },
 
-  emptyStateTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#374151',
+ emptyStateTitle: {
+    fontSize: TYPOGRAPHY.title,
+    fontWeight: '700',
+    color: COLORS.primaryDark,
     textAlign: 'center',
-    marginBottom: 8,
+    marginBottom: SPACING.sm,
   },
 
   emptyStateText: {
-    fontSize: 14,
-    color: '#9ca3af',
+    fontSize: TYPOGRAPHY.small,
+    color: COLORS.textSecondary,
     textAlign: 'center',
-    lineHeight: 20,
+    lineHeight: 21,
   },
 
   inlineError: {
-    backgroundColor: '#fee2e2',
-    borderRadius: 12,
-    padding: 14,
-    marginBottom: 16,
+    backgroundColor: '#FDECEC',
+    borderWidth: 1,
+    borderColor: COLORS.error,
+    borderRadius: RADIUS.md,
+    padding: SPACING.md,
+    marginBottom: SPACING.md,
   },
 
   inlineErrorText: {
-    color: '#b91c1c',
-    fontSize: 14,
-    marginBottom: 8,
+    color: COLORS.error,
+    fontSize: TYPOGRAPHY.small,
+    lineHeight: 20,
   },
 
   retryText: {
-    color: '#991b1b',
-    fontSize: 14,
+    color: COLORS.primary,
+    fontSize: TYPOGRAPHY.small,
     fontWeight: '700',
-    minHeight: 44,
-    paddingVertical: 12,
+    marginTop: SPACING.sm,
   },
 
   loadingText: {
-    marginTop: 12,
-    fontSize: 15,
-    color: '#6b7280',
+    color: COLORS.textSecondary,
+    fontSize: TYPOGRAPHY.body,
+    marginTop: SPACING.md,
+    textAlign: 'center',
   },
 
   errorTitle: {
-    fontSize: 20,
+    fontSize: TYPOGRAPHY.heading,
     fontWeight: '700',
-    color: '#111827',
-    marginBottom: 8,
+    color: COLORS.error,
+    textAlign: 'center',
+    marginBottom: SPACING.md,
   },
 
   errorText: {
-    fontSize: 15,
-    color: '#dc2626',
+    fontSize: TYPOGRAPHY.body,
+    color: COLORS.textSecondary,
     textAlign: 'center',
-    marginBottom: 20,
+    lineHeight: 23,
+    marginBottom: SPACING.lg,
   },
 
   logoutButton: {
-    backgroundColor: '#dc2626',
-    borderRadius: 12,
-    paddingVertical: 16,
-    marginTop: 4,
+    backgroundColor: COLORS.background,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderRadius: RADIUS.md,
+    paddingVertical: SPACING.lg,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: SPACING.md,
   },
 
   logoutButtonText: {
-    color: '#ffffff',
-    fontSize: 16,
+    color: COLORS.text,
+    fontSize: TYPOGRAPHY.body,
     fontWeight: '600',
-    textAlign: 'center',
   },
 });
