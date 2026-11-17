@@ -1,3 +1,5 @@
+
+import time
 from collections.abc import Iterator
 
 from decouple import config
@@ -47,15 +49,75 @@ class GeminiProvider(AIProvider):
             cast=int,
         )
 
+        self.max_retries = config(
+            "GEMINI_MAX_RETRIES",
+            default=2,
+            cast=int,
+        )
+
+        self.retry_base_delay = config(
+            "GEMINI_RETRY_BASE_DELAY",
+            default=1.0,
+            cast=float,
+        )
+
         self.client = genai.Client(
             api_key=self.api_key,
         )
+
+    def _is_retryable_error(self, exc: Exception) -> bool:
+        """
+        Identify temporary Gemini API errors.
+        """
+
+        status_codes = [
+            getattr(exc, "code", None),
+            getattr(exc, "status_code", None),
+        ]
+
+        response = getattr(exc, "response", None)
+
+        if response is not None:
+            status_codes.append(
+                getattr(response, "status_code", None)
+            )
+
+        for status in status_codes:
+            try:
+                if int(status) in (429, 503):
+                    return True
+            except (TypeError, ValueError):
+                continue
+
+        error_text = str(exc).upper()
+
+        retryable_markers = (
+            "429",
+            "503",
+            "RESOURCE_EXHAUSTED",
+            "UNAVAILABLE",
+            "TOO MANY REQUESTS",
+            "SERVICE UNAVAILABLE",
+        )
+
+        return any(
+            marker in error_text
+            for marker in retryable_markers
+        )
+
+    def _retry_delay(self, attempt: int) -> float:
+        """
+        Calculate exponential retry delay.
+        """
+
+        return self.retry_base_delay * (2 ** attempt)
 
     def _build_contents(
         self,
         prompt: str,
         messages: list[dict[str, str]] | None = None,
     ) -> list[types.Content]:
+
         contents = []
 
         if messages is not None:
@@ -93,6 +155,7 @@ class GeminiProvider(AIProvider):
         self,
         system_prompt: str | None = None,
     ) -> types.GenerateContentConfig:
+
         return types.GenerateContentConfig(
             system_instruction=system_prompt,
             temperature=self.temperature,
@@ -110,7 +173,7 @@ class GeminiProvider(AIProvider):
         messages: list[dict[str, str]] | None = None,
     ) -> str:
         """
-        Generate a response using Google Gemini.
+        Generate a response with retry handling.
         """
 
         contents = self._build_contents(
@@ -122,18 +185,34 @@ class GeminiProvider(AIProvider):
             system_prompt,
         )
 
-        try:
-            response = self.client.models.generate_content(
-                model=self.model,
-                contents=contents,
-                config=generation_config,
-            )
-        except Exception as exc:
-            raise AIProviderError(
-                "Failed to generate response from Gemini."
-            ) from exc
+        for attempt in range(self.max_retries + 1):
+            try:
+                response = self.client.models.generate_content(
+                    model=self.model,
+                    contents=contents,
+                    config=generation_config,
+                )
 
-        return response.text or ""
+                return response.text or ""
+
+            except Exception as exc:
+                should_retry = (
+                    self._is_retryable_error(exc)
+                    and attempt < self.max_retries
+                )
+
+                if should_retry:
+                    delay = self._retry_delay(attempt)
+                    time.sleep(delay)
+                    continue
+
+                raise AIProviderError(
+                    "Failed to generate response from Gemini."
+                ) from exc
+
+        raise AIProviderError(
+            "Failed to generate response from Gemini."
+        )
 
     def generate_stream(
         self,
@@ -143,7 +222,10 @@ class GeminiProvider(AIProvider):
         messages: list[dict[str, str]] | None = None,
     ) -> Iterator[str]:
         """
-        Generate a response using Google Gemini as a stream.
+        Generate a streaming response.
+
+        Retries temporary errors only before the first
+        response chunk is delivered.
         """
 
         contents = self._build_contents(
@@ -155,29 +237,46 @@ class GeminiProvider(AIProvider):
             system_prompt,
         )
 
-        try:
-            response_stream = (
-                self.client.models.generate_content_stream(
-                    model=self.model,
-                    contents=contents,
-                    config=generation_config,
-                )
-            )
+        for attempt in range(self.max_retries + 1):
+            response_started = False
 
-            for chunk in response_stream:
-                if chunk.text:
-                    yield chunk.text
-                else:
-                    print(
-                        "GEMINI EMPTY CHUNK:",
-                        chunk,
+            try:
+                response_stream = (
+                    self.client.models.generate_content_stream(
+                        model=self.model,
+                        contents=contents,
+                        config=generation_config,
                     )
+                )
 
-        except Exception as exc:
-            print(
-                "GEMINI STREAM ERROR:",
-                repr(exc),
-            )
-            raise AIProviderError(
-                "Failed to generate streaming response from Gemini."
-            ) from exc
+                for chunk in response_stream:
+                    if chunk.text:
+                        response_started = True
+                        yield chunk.text
+
+                return
+
+            except Exception as exc:
+                should_retry = (
+                    not response_started
+                    and self._is_retryable_error(exc)
+                    and attempt < self.max_retries
+                )
+
+                if should_retry:
+                    delay = self._retry_delay(attempt)
+                    time.sleep(delay)
+                    continue
+
+                print(
+                    "GEMINI STREAM ERROR:",
+                    repr(exc),
+                )
+
+                raise AIProviderError(
+                    "Failed to generate streaming response from Gemini."
+                ) from exc
+
+        raise AIProviderError(
+            "Failed to generate streaming response from Gemini."
+        )
