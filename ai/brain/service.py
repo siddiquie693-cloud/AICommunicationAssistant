@@ -1,5 +1,6 @@
 
 from django.db import models
+from dataclasses import replace
 
 from ai.android.service import AndroidActionEngine
 from ai.android.types import AndroidActionRequest
@@ -10,8 +11,10 @@ from ai.memory.service import MemoryEngine
 from ai.planner.service import ActionPlanner
 from ai.safety.service import SafetyEngine
 from ai.safety.request_builder import ActionSafetyRequestBuilder
-
+from ai.android.registry import ActionRegistry
 from people.services import PersonIdentityResolver
+from ai.android.registry_types import ActionDefinition
+from ai.safety.types import SafetyLevel
 
 
 class NIRABrain:
@@ -31,6 +34,7 @@ class NIRABrain:
         action_planner: ActionPlanner | None = None,
         safety_engine: SafetyEngine | None = None,
         android_action_engine: AndroidActionEngine | None = None,
+        action_registry: ActionRegistry | None = None,
         person_identity_resolver=None,
         safety_request_builder=None,
     ):
@@ -38,6 +42,8 @@ class NIRABrain:
         self.intent_engine = intent_engine
         self.context_engine = context_engine
         self.action_planner = action_planner
+        self.action_registry = action_registry or ActionRegistry()
+        self._register_default_actions()
         self.safety_engine = safety_engine
         self.android_action_engine = android_action_engine
         self.person_identity_resolver = (
@@ -48,6 +54,55 @@ class NIRABrain:
             safety_request_builder or ActionSafetyRequestBuilder()
         )
 
+    def _register_default_actions(self) -> None:
+        definitions = (
+            ActionDefinition(
+                name="open_app",
+                required_parameters=("app",),
+                parameter_types={"app": str},
+                risk_level=SafetyLevel.LOW,
+            ),
+            ActionDefinition(
+                name="navigate",
+                required_parameters=("location",),
+                parameter_types={"location": str},
+                risk_level=SafetyLevel.LOW,
+            ),
+            ActionDefinition(
+                name="play_media",
+                required_parameters=("request",),
+                parameter_types={"request": str},
+                risk_level=SafetyLevel.LOW,
+            ),
+            ActionDefinition(
+                name="create_reminder",
+                required_parameters=("request",),
+                parameter_types={"request": str},
+                risk_level=SafetyLevel.MEDIUM,
+            ),
+            ActionDefinition(
+                name="send_message",
+                required_parameters=("recipient",),
+                optional_parameters=("request", "content"),
+                parameter_types={
+                    "recipient": str,
+                    "request": str,
+                    "content": str,
+                },
+                risk_level=SafetyLevel.HIGH,
+            ),
+            ActionDefinition(
+                name="call_person",
+                required_parameters=("recipient",),
+                parameter_types={"recipient": str},
+                risk_level=SafetyLevel.HIGH,
+            ),
+        )
+
+        for definition in definitions:
+            if self.action_registry.get(definition.name) is None:
+                self.action_registry.register(definition)
+    
     def think(
         self,
         request: BrainRequest,
@@ -181,8 +236,18 @@ class NIRABrain:
 
         safety_results = []
         action_results = []
+        registry_errors = []
 
         for action in action_plan.actions:
+            registry_result = self.action_registry.validate(
+                action.name,
+                action.parameters,
+            )
+
+            if not registry_result.is_valid:
+                registry_errors.extend(registry_result.errors)
+                continue
+
             safety_request = self.safety_request_builder.build(action)
 
             safety_result = self.safety_engine.evaluate(
@@ -194,15 +259,9 @@ class NIRABrain:
             if safety_result.decision.value != "allow":
                 continue
 
-            execution_parameters = {
-                key: value
-                for key, value in action.parameters.items()
-                if not key.startswith("_")
-            }
-
             android_request = AndroidActionRequest(
                 action_name=action.name,
-                parameters=execution_parameters,
+                parameters=registry_result.validated_parameters,
             )
 
             action_result = self.android_action_engine.execute(
@@ -210,6 +269,11 @@ class NIRABrain:
             )
 
             action_results.append(action_result)
+        if registry_errors:
+            action_plan = replace(
+                action_plan,
+                errors=action_plan.errors + tuple(registry_errors),
+            )    
 
         return BrainPipelineResult(
             intent=intent,
