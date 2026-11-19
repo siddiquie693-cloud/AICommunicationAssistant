@@ -1,8 +1,9 @@
 
 from unittest.mock import Mock
+from ai.safety.service import SafetyEngine
 
 from django.test import SimpleTestCase
-
+from ai.safety.evaluator import RuleBasedSafetyEvaluator
 from ai.brain.service import NIRABrain
 from ai.brain.types import BrainRequest
 from ai.core.dependencies import NIRADependencies
@@ -122,6 +123,25 @@ class NIRACoreFactoryTests(SimpleTestCase):
         with self.assertRaises(ValueError):
             core.process(request)
 
+    def test_create_nira_core_builds_safety_engine_from_evaluator(self):
+        evaluator = RuleBasedSafetyEvaluator()
+
+        dependencies = NIRADependencies(
+            ai_service=Mock(),
+            context_engine=Mock(),
+            intent_engine=Mock(),
+            action_planner=Mock(),
+            safety_evaluator=evaluator,
+        )
+
+        core = create_nira_core(dependencies=dependencies)
+
+        self.assertIsInstance(core.brain.safety_engine, SafetyEngine)
+        self.assertIs(
+            core.brain.safety_engine.evaluator,
+            evaluator,
+        )
+
 
 class NIRADependenciesTests(SimpleTestCase):
 
@@ -136,3 +156,27 @@ class NIRADependenciesTests(SimpleTestCase):
 
         with self.assertRaises(ValueError):
             dependencies.validate_for_phone_actions()
+
+    def test_validate_for_brain_requires_safety_dependency(self):
+        dependencies = NIRADependencies(
+            ai_service=Mock(),
+            context_engine=Mock(),
+            intent_engine=Mock(),
+            action_planner=Mock(),
+        )
+
+        with self.assertRaises(ValueError):
+            dependencies.validate_for_brain()
+
+    def test_validate_for_brain_rejects_both_safety_dependencies(self):
+        dependencies = NIRADependencies(
+            ai_service=Mock(),
+            context_engine=Mock(),
+            intent_engine=Mock(),
+            action_planner=Mock(),
+            safety_engine=Mock(),
+            safety_evaluator=Mock(),
+        )
+
+        with self.assertRaises(ValueError):
+            dependencies.validate_for_brain()
