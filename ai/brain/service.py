@@ -1,10 +1,18 @@
 
 from django.db import models
 from dataclasses import replace
+from secrets import token_urlsafe
 
 from ai.android.service import AndroidActionEngine
 from ai.android.types import AndroidActionRequest
-from ai.brain.types import BrainPipelineResult, BrainRequest
+from ai.brain.types import (
+    BrainPipelineResult,
+    BrainRequest,
+    PendingActionConfirmation,
+)
+from ai.android.types import AndroidActionRequest, AndroidActionResult
+from ai.planner.types import PlannedAction
+
 from ai.context.service import ContextEngine
 from ai.intent.service import IntentEngine
 from ai.memory.service import MemoryEngine
@@ -37,6 +45,7 @@ class NIRABrain:
         action_registry: ActionRegistry | None = None,
         person_identity_resolver=None,
         safety_request_builder=None,
+        confirmation_store=None,
     ):
         self.ai_service = ai_service
         self.intent_engine = intent_engine
@@ -46,6 +55,7 @@ class NIRABrain:
         self._register_default_actions()
         self.safety_engine = safety_engine
         self.android_action_engine = android_action_engine
+        self.confirmation_store = confirmation_store
         self.person_identity_resolver = (
             person_identity_resolver
             or PersonIdentityResolver
@@ -103,6 +113,106 @@ class NIRABrain:
             if self.action_registry.get(definition.name) is None:
                 self.action_registry.register(definition)
     
+    def approve_action(self, *, user, confirmation_id):
+        """
+        Approve and execute a pending action after fresh safety validation.
+
+        A confirmation can be consumed only once.
+        """
+
+        if user is None or not user.is_authenticated:
+            raise ValueError("An authenticated user is required.")
+
+        if self.confirmation_store is None:
+            raise ValueError("Confirmation Store is not configured.")
+
+        if self.safety_engine is None:
+            raise ValueError("Safety Engine is not configured.")
+
+        if self.android_action_engine is None:
+            raise ValueError("Android Action Engine is not configured.")
+
+        # First, resolve the pending confirmation.
+        record = self.confirmation_store.resolve(
+            user=user,
+            confirmation_id=confirmation_id,
+            approved=True,
+        )
+
+        if record is None:
+            return AndroidActionResult(
+                success=False,
+                action_name="confirmation",
+                message="Confirmation not found or no longer pending.",
+            )
+
+        if record.status != record.Status.APPROVED:
+            return AndroidActionResult(
+                success=False,
+                action_name=record.action_name,
+                message="Confirmation has expired.",
+            )
+
+        # Consume approval before any execution attempt.
+        consumed_record = self.confirmation_store.consume_approved(
+            user=user,
+            confirmation_id=confirmation_id,
+        )
+
+        if consumed_record is None:
+            return AndroidActionResult(
+                success=False,
+                action_name=record.action_name,
+                message="Confirmation expired or has already been consumed.",
+            )
+
+        # Revalidate the stored action.
+        planned_action = PlannedAction(
+            name=consumed_record.action_name,
+            parameters=consumed_record.parameters,
+        )
+
+        registry_result = self.action_registry.validate(
+            planned_action.name,
+            planned_action.parameters,
+        )
+
+        if not registry_result.is_valid:
+            return AndroidActionResult(
+                success=False,
+                action_name=planned_action.name,
+                message="Action validation failed: "
+                + "; ".join(registry_result.errors),
+            )
+
+        validated_action = replace(
+            planned_action,
+            parameters=registry_result.validated_parameters,
+        )
+
+        # Perform a fresh safety evaluation.
+        safety_request = self.safety_request_builder.build(
+            validated_action
+        )
+
+        safety_result = self.safety_engine.evaluate(safety_request)
+
+        if safety_result.decision.value != "allow":
+            return AndroidActionResult(
+                success=False,
+                action_name=validated_action.name,
+                message="Execution blocked by safety engine: "
+                + safety_result.reason,
+            )
+
+        # Execute only after all checks pass.
+        android_request = AndroidActionRequest(
+            action_name=validated_action.name,
+            parameters=registry_result.validated_parameters,
+        )
+
+        return self.android_action_engine.execute(android_request)
+            
     def think(
         self,
         request: BrainRequest,
@@ -126,6 +236,7 @@ class NIRABrain:
         self,
         request: BrainRequest,
         *,
+        user=None,
         person=None,
         conversation=None,
     ) -> BrainPipelineResult:
@@ -237,6 +348,7 @@ class NIRABrain:
         safety_results = []
         action_results = []
         registry_errors = []
+        pending_confirmations = []
 
         for action in action_plan.actions:
             registry_result = self.action_registry.validate(
@@ -248,7 +360,12 @@ class NIRABrain:
                 registry_errors.extend(registry_result.errors)
                 continue
 
-            safety_request = self.safety_request_builder.build(action)
+            validated_action = replace(
+                action,
+                parameters=registry_result.validated_parameters,
+            )
+
+            safety_request = self.safety_request_builder.build(validated_action)
 
             safety_result = self.safety_engine.evaluate(
                 safety_request
@@ -256,7 +373,44 @@ class NIRABrain:
 
             safety_results.append(safety_result)
 
-            if safety_result.decision.value != "allow":
+            decision = safety_result.decision.value
+
+            if decision == "confirm":
+                if self.confirmation_store is None:
+                    raise ValueError("Confirmation Store is required for pending actions.")
+
+                if user is None or not user.is_authenticated:
+                    raise ValueError(
+                        "An authenticated user is required for action confirmation."
+                    )
+
+            if decision == "confirm":
+                if self.confirmation_store is None:
+                    raise ValueError(
+                        "Confirmation Store is required for pending actions."
+                    )
+
+                if user is None or not user.is_authenticated:
+                    raise ValueError(
+                        "An authenticated user is required for action confirmation."
+                    )
+
+                pending_confirmation = PendingActionConfirmation(
+                    confirmation_id=token_urlsafe(32),
+                    action_name=action.name,
+                    parameters=registry_result.validated_parameters,
+                    reason=safety_result.reason,
+                )
+
+                self.confirmation_store.create_pending(
+                    user=user,
+                    confirmation=pending_confirmation,
+                )
+
+                pending_confirmations.append(pending_confirmation)
+                break
+
+            if decision != "allow":
                 continue
 
             android_request = AndroidActionRequest(
@@ -264,11 +418,10 @@ class NIRABrain:
                 parameters=registry_result.validated_parameters,
             )
 
-            action_result = self.android_action_engine.execute(
-                android_request
-            )
+            action_result = self.android_action_engine.execute(android_request)
 
             action_results.append(action_result)
+
         if registry_errors:
             action_plan = replace(
                 action_plan,
@@ -282,4 +435,5 @@ class NIRABrain:
             safety_results=safety_results,
             action_results=action_results,
             validation_result=validation_result,
+            pending_confirmations=pending_confirmations,
         )

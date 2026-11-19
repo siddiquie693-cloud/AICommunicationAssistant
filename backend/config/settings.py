@@ -105,6 +105,7 @@ INSTALLED_APPS = [
     "channels",
     "memory",
     "people",
+    "confirmations",
 ]
 
 AUTH_USER_MODEL = "users.User"

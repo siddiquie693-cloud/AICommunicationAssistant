@@ -27,6 +27,9 @@ from ai.safety.types import (
     SafetyRequest,
     SafetyResult,
 )
+from ai.brain.types import PendingActionConfirmation
+from confirmations.models import PendingConfirmation
+from confirmations.store import ConfirmationStore
 
 class NIRABrainTests(TestCase):
 
@@ -2593,6 +2596,9 @@ class NIRABrainTests(TestCase):
         action_planner = Mock()
         safety_engine = Mock()
         android_action_engine = Mock()
+        confirmation_store = Mock()
+        user = Mock()
+        user.is_authenticated = True
 
         request = BrainRequest(
             text="Send a message to John",
@@ -2644,9 +2650,10 @@ class NIRABrainTests(TestCase):
             action_planner=action_planner,
             safety_engine=safety_engine,
             android_action_engine=android_action_engine,
+            confirmation_store=confirmation_store,
         )
 
-        result = brain.process(request)
+        result = brain.process(request, user=user)
 
         self.assertEqual(
             result.safety_results,
@@ -2655,6 +2662,18 @@ class NIRABrainTests(TestCase):
         self.assertEqual(result.action_results, [])
 
         android_action_engine.execute.assert_not_called()
+
+        confirmation_store.create_pending.assert_called_once()
+
+        saved_kwargs = (
+            confirmation_store.create_pending.call_args.kwargs
+        )
+
+        self.assertEqual(saved_kwargs["user"], user)
+        self.assertEqual(
+            saved_kwargs["confirmation"].action_name,
+            "send_message",
+        )
 
     def test_nira_brain_does_not_allow_profile_instruction_to_bypass_safety(
         self,
@@ -2666,6 +2685,9 @@ class NIRABrainTests(TestCase):
         action_planner = Mock()
         safety_engine = Mock()
         android_action_engine = Mock()
+        confirmation_store = Mock()
+        user = Mock()
+        user.is_authenticated = True
 
         request = BrainRequest(
             text="Send a message to John",
@@ -2723,9 +2745,10 @@ class NIRABrainTests(TestCase):
             action_planner=action_planner,
             safety_engine=safety_engine,
             android_action_engine=android_action_engine,
+            confirmation_store=confirmation_store,
         )
 
-        result = brain.process(request)
+        result = brain.process(request, user=user)
 
         self.assertEqual(
             result.context.profile["custom_instructions"],
@@ -2752,6 +2775,18 @@ class NIRABrainTests(TestCase):
         )
 
         android_action_engine.execute.assert_not_called()
+
+        confirmation_store.create_pending.assert_called_once()
+
+        saved_kwargs = (
+            confirmation_store.create_pending.call_args.kwargs
+        )
+
+        self.assertEqual(saved_kwargs["user"], user)
+        self.assertEqual(
+            saved_kwargs["confirmation"].action_name,
+            "send_message",
+        )
 
     def test_nira_brain_does_not_allow_profile_data_to_authorize_denied_action(
         self,
@@ -3051,3 +3086,212 @@ class NIRABrainTests(TestCase):
             person=person,
             conversation=None,
         )
+
+    def _create_approval_test_setup(
+        self,
+        action_name="send_message",
+        parameters=None,
+    ):
+        user = get_user_model().objects.create_user(
+            username="approvaltestuser",
+            email="approvaltestuser@example.com",
+            password="testpass123",
+        )
+
+        confirmation_store = ConfirmationStore()
+
+        confirmation = PendingActionConfirmation(
+            confirmation_id="approval-test-token",
+            action_name=action_name,
+            parameters=parameters or {
+                "recipient": "John",
+                "content": "Hello",
+            },
+            reason="User confirmation is required.",
+        )
+
+        confirmation_store.create_pending(
+            user=user,
+            confirmation=confirmation,
+        )
+
+        safety_engine = Mock()
+        android_action_engine = Mock()
+
+        expected_result = AndroidActionResult(
+            success=True,
+            action_name=action_name,
+            message="Action executed successfully.",
+        )
+
+        android_action_engine.execute.return_value = expected_result
+
+        brain = NIRABrain(
+            Mock(),
+            safety_engine=safety_engine,
+            android_action_engine=android_action_engine,
+            confirmation_store=confirmation_store,
+        )
+
+        return (
+            user,
+            confirmation_store,
+            safety_engine,
+            android_action_engine,
+            brain,
+            expected_result,
+        )  
+
+    
+    def test_approve_action_executes_valid_approved_action(self):
+        (
+            user,
+            store,
+            safety_engine,
+            android_engine,
+            brain,
+            expected_result,
+        ) = self._create_approval_test_setup()
+
+        safety_engine.evaluate.return_value = SafetyResult(
+            decision=SafetyDecision.ALLOW,
+            reason="Action is safe.",
+        )
+
+        result = brain.approve_action(
+            user=user,
+            confirmation_id="approval-test-token",
+        )
+
+        self.assertEqual(result, expected_result)
+        android_engine.execute.assert_called_once()
+
+        record = PendingConfirmation.objects.get(
+            confirmation_id="approval-test-token",
+        )
+        self.assertEqual(
+            record.status,
+            PendingConfirmation.Status.CONSUMED,
+        )
+
+    def test_approve_action_blocks_invalid_action(self):
+        (
+            user,
+            store,
+            safety_engine,
+            android_engine,
+            brain,
+            expected_result,
+        ) = self._create_approval_test_setup(
+            action_name="unknown_action",
+        )
+
+        result = brain.approve_action(
+            user=user,
+            confirmation_id="approval-test-token",
+        )
+
+        self.assertFalse(result.success)
+        self.assertIn("validation failed", result.message.lower())
+        android_engine.execute.assert_not_called()
+        safety_engine.evaluate.assert_not_called()
+
+    def test_approve_action_blocks_fresh_safety_denial(self):
+        (
+            user,
+            store,
+            safety_engine,
+            android_engine,
+            brain,
+            expected_result,
+        ) = self._create_approval_test_setup()
+
+        safety_engine.evaluate.return_value = SafetyResult(
+            decision=SafetyDecision.DENY,
+            reason="Action is no longer permitted.",
+        )
+
+        result = brain.approve_action(
+            user=user,
+            confirmation_id="approval-test-token",
+        )
+
+        self.assertFalse(result.success)
+        self.assertIn("blocked", result.message.lower())
+        android_engine.execute.assert_not_called()
+
+    def test_approve_action_does_not_execute_if_safety_requires_confirmation_again(self):
+        (
+            user,
+            store,
+            safety_engine,
+            android_engine,
+            brain,
+            expected_result,
+        ) = self._create_approval_test_setup()
+
+        safety_engine.evaluate.return_value = SafetyResult(
+            decision=SafetyDecision.CONFIRM,
+            reason="Additional confirmation is required.",
+        )
+
+        result = brain.approve_action(
+            user=user,
+            confirmation_id="approval-test-token",
+        )
+
+        self.assertFalse(result.success)
+        self.assertIn("blocked", result.message.lower())
+        android_engine.execute.assert_not_called()
+
+    def test_approve_action_rejects_expired_confirmation(self):
+        (
+            user,
+            store,
+            safety_engine,
+            android_engine,
+            brain,
+            expected_result,
+        ) = self._create_approval_test_setup()
+
+        PendingConfirmation.objects.filter(
+            confirmation_id="approval-test-token",
+        ).update(
+            expires_at=timezone.now() - timedelta(minutes=1),
+        )
+
+        result = brain.approve_action(
+            user=user,
+            confirmation_id="approval-test-token",
+        )
+
+        self.assertFalse(result.success)
+        self.assertIn("expired", result.message.lower())
+        android_engine.execute.assert_not_called()
+
+    def test_approve_action_rejects_confirmation_owned_by_another_user(self):
+        (
+            user,
+            store,
+            safety_engine,
+            android_engine,
+            brain,
+            expected_result,
+        ) = self._create_approval_test_setup()
+
+        other_user = get_user_model().objects.create_user(
+            username="otherapprovaluser",
+            email="otherapprovaluser@example.com",
+            password="testpass123",
+        )
+
+        result = brain.approve_action(
+            user=other_user,
+            confirmation_id="approval-test-token",
+        )
+
+        self.assertFalse(result.success)
+        self.assertIn("not found", result.message.lower())
+        android_engine.execute.assert_not_called()
+        safety_engine.evaluate.assert_not_called()
+  

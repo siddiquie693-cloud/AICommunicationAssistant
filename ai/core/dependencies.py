@@ -18,6 +18,7 @@ class NIRADependencies:
 
     person_identity_resolver: Any = None
     safety_request_builder: Any = None
+    confirmation_store: Any = None
 
     def validate_for_brain(self) -> None:
         """Validate dependencies required for Brain processing."""
@@ -74,6 +75,11 @@ class NIRADependencies:
         if self.safety_request_builder is not None:
             dependencies["safety_request_builder"] = (
                 self.safety_request_builder
+            )
+
+        if self.confirmation_store is not None:
+            dependencies["confirmation_store"] = (
+                self.confirmation_store
             )
 
         return dependencies

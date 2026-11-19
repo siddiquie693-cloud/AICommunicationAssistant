@@ -1,7 +1,10 @@
 from django.test import SimpleTestCase
 
-from ai.brain.types import BrainRequest
-from ai.brain.types import BrainPipelineResult, BrainRequest
+from ai.brain.types import ( 
+    BrainPipelineResult,
+    BrainRequest,
+    PendingActionConfirmation,
+)
 
 class BrainRequestTests(SimpleTestCase):
 
@@ -91,3 +94,76 @@ class BrainPipelineResultTests(SimpleTestCase):
 
         self.assertEqual(result.safety_results, [])
         self.assertEqual(result.action_results, [])
+
+    def test_pending_confirmations_default_to_empty_list(self):
+        result = BrainPipelineResult(
+            intent=object(),
+            context=object(),
+            action_plan=object(),
+            safety_results=[],
+            action_results=[],
+        )
+
+        self.assertEqual(result.pending_confirmations, [])    
+
+class PendingActionConfirmationTests(SimpleTestCase):
+
+    def test_creates_valid_pending_confirmation(self):
+        confirmation = PendingActionConfirmation(
+            confirmation_id="confirm_001",
+            action_name="send_message",
+            parameters={
+                "recipient": "John",
+                "content": "Hello",
+            },
+            reason="User confirmation is required.",
+        )
+
+        self.assertEqual(
+            confirmation.confirmation_id,
+            "confirm_001",
+        )
+        self.assertEqual(
+            confirmation.action_name,
+            "send_message",
+        )
+        self.assertEqual(
+            confirmation.parameters["recipient"],
+            "John",
+        )
+
+    def test_rejects_empty_confirmation_id(self):
+        with self.assertRaises(ValueError):
+            PendingActionConfirmation(
+                confirmation_id=" ",
+                action_name="send_message",
+                parameters={},
+                reason="Approval required.",
+            )
+
+    def test_rejects_empty_action_name(self):
+        with self.assertRaises(ValueError):
+            PendingActionConfirmation(
+                confirmation_id="confirm_001",
+                action_name=" ",
+                parameters={},
+                reason="Approval required.",
+            )
+
+    def test_rejects_invalid_parameters(self):
+        with self.assertRaises(TypeError):
+            PendingActionConfirmation(
+                confirmation_id="confirm_001",
+                action_name="send_message",
+                parameters="invalid",
+                reason="Approval required.",
+            )
+
+    def test_rejects_invalid_reason(self):
+        with self.assertRaises(TypeError):
+            PendingActionConfirmation(
+                confirmation_id="confirm_001",
+                action_name="send_message",
+                parameters={},
+                reason=123,
+            )

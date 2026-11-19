@@ -1,5 +1,5 @@
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 
@@ -34,6 +34,37 @@ class BrainRequest:
 
 
 @dataclass(frozen=True)
+class PendingActionConfirmation:
+    """
+    Represents an action waiting for explicit user approval.
+    """
+
+    confirmation_id: str
+    action_name: str
+    parameters: dict[str, Any]
+    reason: str
+
+    def __post_init__(self):
+        if not isinstance(self.confirmation_id, str):
+            raise TypeError("confirmation_id must be a string.")
+
+        if not self.confirmation_id.strip():
+            raise ValueError("confirmation_id must not be empty.")
+
+        if not isinstance(self.action_name, str):
+            raise TypeError("action_name must be a string.")
+
+        if not self.action_name.strip():
+            raise ValueError("action_name must not be empty.")
+
+        if not isinstance(self.parameters, dict):
+            raise TypeError("parameters must be a dictionary.")
+
+        if not isinstance(self.reason, str):
+            raise TypeError("reason must be a string.")
+
+
+@dataclass(frozen=True)
 class BrainPipelineResult:
     """
     Result produced after processing a NIRA action pipeline.
@@ -45,3 +76,6 @@ class BrainPipelineResult:
     safety_results: list[Any]
     action_results: list[Any]
     validation_result: Any = None
+    pending_confirmations: list[PendingActionConfirmation] = field(
+        default_factory=list
+    )
